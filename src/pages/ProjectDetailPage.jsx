@@ -4,9 +4,13 @@ import { projectAPI } from '../api'
 import ConditionsTab from '../components/ConditionsTab'
 import PlansTab from '../components/PlansTab'
 import EstimateTab from '../components/EstimateTab'
+import SpecificationsTab from '../components/SpecificationsTab'
+import SpecRoofSystemTab from '../components/SpecRoofSystemTab'
 import { LoadingSpinner, ErrorDisplay } from '../components/common'
 
 const TABS = [
+  { id: 'specifications', label: 'Specifications', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+  { id: 'spec-roof-system', label: 'Spec Roof System', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
   { id: 'conditions', label: 'Conditions', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
   { id: 'plans', label: 'Plans', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
   { id: 'estimate', label: 'Estimate', icon: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z' },
@@ -15,7 +19,7 @@ const TABS = [
 export default function ProjectDetailPage() {
   const { id } = useParams()
   const [project, setProject] = useState(null)
-  const [activeTab, setActiveTab] = useState('conditions')
+  const [activeTab, setActiveTab] = useState('specifications')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -30,7 +34,9 @@ export default function ProjectDetailPage() {
     }
   }
 
-  useEffect(() => { fetchProject() }, [id])
+  useEffect(() => {
+    fetchProject()
+  }, [id])
 
   if (loading) return <LoadingSpinner />
   if (error) return <ErrorDisplay message={error} onRetry={fetchProject} />
@@ -48,7 +54,7 @@ export default function ProjectDetailPage() {
         </Link>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
+            <h1 className="text-2xl font-bold text-gray-900">{project.project_name || project.name}</h1>
             {project.address && (
               <p className="text-sm text-gray-500 mt-1 flex items-center">
                 <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -70,12 +76,12 @@ export default function ProjectDetailPage() {
 
       {/* Tabs */}
       <div className="border-b border-gray-200 mb-6">
-        <nav className="flex space-x-8">
+        <nav className="flex space-x-6 overflow-x-auto">
           {TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'border-primary-500 text-primary-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -92,6 +98,12 @@ export default function ProjectDetailPage() {
 
       {/* Tab Content */}
       <div>
+        {activeTab === 'specifications' && (
+          <SpecificationsTab projectId={id} project={project} onProjectUpdate={fetchProject} />
+        )}
+        {activeTab === 'spec-roof-system' && (
+          <SpecRoofSystemTab projectId={id} project={project} onProjectUpdate={fetchProject} />
+        )}
         {activeTab === 'conditions' && <ConditionsTab projectId={id} />}
         {activeTab === 'plans' && <PlansTab projectId={id} />}
         {activeTab === 'estimate' && <EstimateTab projectId={id} />}
