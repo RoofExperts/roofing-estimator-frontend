@@ -54,6 +54,8 @@ export const projectAPI = {
     })
   },
   analyzeSpec: (id) => api.post(`/projects/${id}/analyze-spec`),
+  update: (id, data) => api.put(`/projects/${id}`, data),
+  delete: (id) => api.delete(`/projects/${id}`),
 }
 
 // ============= CONDITIONS =============
