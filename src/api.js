@@ -83,6 +83,7 @@ export const planAPI = {
   updateExtraction: (id, data) => api.put(`/api/v1/extractions/${id}`, data),
   deleteExtraction: (id) => api.delete(`/api/v1/extractions/${id}`),
   regenerateConditions: (id) => api.post(`/api/v1/plan-files/${id}/regenerate-conditions`),
+  reanalyze: (id) => api.post(`/api/v1/plan-files/${id}/reanalyze`),
 }
 
 // ============= ESTIMATES =============
