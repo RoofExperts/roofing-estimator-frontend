@@ -65,6 +65,7 @@ export const conditionAPI = {
   create: (projectId, data) => api.post(`/api/v1/projects/${projectId}/conditions`, data),
   update: (id, data) => api.put(`/api/v1/conditions/${id}`, data),
   delete: (id) => api.delete(`/api/v1/conditions/${id}`),
+  smartBuild: (projectId) => api.post(`/api/v1/projects/${projectId}/smart-build-conditions`),
 }
 
 // ============= VISION / PLANS =============

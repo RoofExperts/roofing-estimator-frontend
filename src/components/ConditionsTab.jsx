@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { conditionAPI, referenceAPI, planAPI } from '../api'
+import { conditionAPI, referenceAPI, planAPI, projectAPI } from '../api'
 import { LoadingSpinner, ErrorDisplay } from './common'
 import Modal from './Modal'
 
@@ -472,6 +472,9 @@ export default function ConditionsTab({ projectId }) {
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [editValues, setEditValues] = useState({})
+  const [smartBuilding, setSmartBuilding] = useState(false)
+  const [smartBuildResult, setSmartBuildResult] = useState(null)
+  const [projectData, setProjectData] = useState(null)
   const [newCondition, setNewCondition] = useState({
     condition_type: '',
     measurement_value: '',
@@ -481,18 +484,35 @@ export default function ConditionsTab({ projectId }) {
 
   const fetchConditions = useCallback(async () => {
     try {
-      const [condRes, typesRes] = await Promise.all([
+      const [condRes, typesRes, projRes] = await Promise.all([
         conditionAPI.list(projectId),
-        referenceAPI.conditionTypes().catch(() => ({ data: { condition_types: [] } }))
+        referenceAPI.conditionTypes().catch(() => ({ data: { condition_types: [] } })),
+        projectAPI.get(projectId).catch(() => ({ data: null }))
       ])
       setConditions(condRes.data)
       setConditionTypes(typesRes.data?.condition_types || typesRes.data || [])
+      setProjectData(projRes.data)
     } catch (err) {
       setError('Failed to load conditions')
     } finally {
       setLoading(false)
     }
   }, [projectId])
+
+  const handleSmartBuild = async () => {
+    setSmartBuilding(true)
+    setError('')
+    setSmartBuildResult(null)
+    try {
+      const res = await conditionAPI.smartBuild(projectId)
+      setSmartBuildResult(res.data)
+      fetchConditions()
+    } catch (err) {
+      setError('Smart Build failed: ' + (err.response?.data?.detail || err.message))
+    } finally {
+      setSmartBuilding(false)
+    }
+  }
 
   useEffect(() => {
     fetchConditions()
@@ -554,6 +574,114 @@ export default function ConditionsTab({ projectId }) {
         projectId={projectId}
         onConditionsChanged={fetchConditions}
       />
+
+      {/* Smart Build Section */}
+      <div className="my-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-5">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <h3 className="text-base font-semibold text-blue-900 flex items-center">
+              <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Smart Build Conditions
+            </h3>
+            <p className="text-sm text-blue-700 mt-1">
+              Reads your spec analysis + plan extractions to automatically detect the roofing system
+              (TPO/EPDM/PVC), build conditions with the right materials, and estimate perimeter from roof area.
+            </p>
+            {projectData && (
+              <div className="mt-2 flex gap-3 text-xs text-blue-600">
+                <span>System: <strong>{projectData.system_type || 'Auto-detect'}</strong></span>
+                <span>Spec: <strong>{projectData.analysis_status === 'complete' ? 'Analyzed' : projectData.analysis_status || 'None'}</strong></span>
+              </div>
+            )}
+          </div>
+          <button
+            onClick={handleSmartBuild}
+            disabled={smartBuilding}
+            className={`ml-4 inline-flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition-colors shadow-sm ${
+              smartBuilding
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            {smartBuilding ? (
+              <>
+                <svg className="animate-spin w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Building...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Smart Build
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Smart Build Results */}
+        {smartBuildResult && (
+          <div className="mt-4 bg-white/80 rounded-lg border border-blue-100 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-semibold text-blue-900">
+                Build Result: {smartBuildResult.system_type} System
+              </h4>
+              <span className="text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded">
+                {smartBuildResult.conditions_created} conditions created
+              </span>
+            </div>
+
+            {/* Spec Summary */}
+            {smartBuildResult.spec_data && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+                {smartBuildResult.spec_data.membrane && (
+                  <div className="text-xs"><span className="text-gray-500">Membrane:</span> <strong>{smartBuildResult.spec_data.membrane}</strong></div>
+                )}
+                {smartBuildResult.spec_data.thickness && (
+                  <div className="text-xs"><span className="text-gray-500">Thickness:</span> <strong>{smartBuildResult.spec_data.thickness}</strong></div>
+                )}
+                {smartBuildResult.spec_data.attachment && (
+                  <div className="text-xs"><span className="text-gray-500">Attachment:</span> <strong>{smartBuildResult.spec_data.attachment}</strong></div>
+                )}
+                {smartBuildResult.spec_data.insulation && (
+                  <div className="text-xs"><span className="text-gray-500">Insulation:</span> <strong>{smartBuildResult.spec_data.insulation}</strong></div>
+                )}
+                {smartBuildResult.spec_data.cover_board && (
+                  <div className="text-xs"><span className="text-gray-500">Cover Board:</span> <strong>{smartBuildResult.spec_data.cover_board}</strong></div>
+                )}
+                {smartBuildResult.spec_data.warranty && (
+                  <div className="text-xs"><span className="text-gray-500">Warranty:</span> <strong>{smartBuildResult.spec_data.warranty} yr</strong></div>
+                )}
+                {smartBuildResult.spec_data.manufacturer && (
+                  <div className="text-xs col-span-2"><span className="text-gray-500">Manufacturer:</span> <strong>{
+                    Array.isArray(smartBuildResult.spec_data.manufacturer)
+                      ? smartBuildResult.spec_data.manufacturer.join(', ')
+                      : smartBuildResult.spec_data.manufacturer
+                  }</strong></div>
+                )}
+              </div>
+            )}
+
+            {/* Created Conditions Preview */}
+            {smartBuildResult.conditions && smartBuildResult.conditions.length > 0 && (
+              <div className="space-y-1">
+                {smartBuildResult.conditions.map((c, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs bg-gray-50 rounded px-3 py-1.5">
+                    <span className="font-medium text-gray-700">{c.type}</span>
+                    <span className="text-gray-500">{c.extraction_type}</span>
+                    <span className="font-mono text-gray-900">{c.value?.toLocaleString()} {c.unit}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <SectionDivider />
 
