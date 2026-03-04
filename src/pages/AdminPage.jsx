@@ -89,7 +89,9 @@ export default function AdminPage() {
       const res = await adminAPI.getCompany()
       setForm(res.data)
     } catch (err) {
-      setMessage({ text: 'Failed to load settings', type: 'error' })
+      const detail = err.response?.data?.detail || err.message || 'Unknown error'
+      setMessage({ text: `Failed to load settings: ${detail}`, type: 'error' })
+      console.error('Admin load error:', err.response?.data || err)
     } finally {
       setLoading(false)
     }
@@ -105,7 +107,9 @@ export default function AdminPage() {
       setMessage({ text: 'Settings saved successfully!', type: 'success' })
       setTimeout(() => setMessage({ text: '', type: '' }), 3000)
     } catch (err) {
-      setMessage({ text: 'Failed to save settings. Please try again.', type: 'error' })
+      const detail = err.response?.data?.detail || err.response?.data?.traceback || err.message || 'Unknown error'
+      setMessage({ text: `Failed to save: ${detail}`, type: 'error' })
+      console.error('Admin save error:', err.response?.data || err)
     } finally {
       setSaving(false)
     }
