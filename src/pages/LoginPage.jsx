@@ -1,36 +1,53 @@
 import { useState } from 'react'
-import { useNavigate, Navigate } from 'react-router-dom'
+import { useNavigate, Navigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../AuthContext'
+import { authAPI } from '../api'
 
 export default function LoginPage() {
-  const [isRegister, setIsRegister] = useState(false)
+  const [mode, setMode] = useState('login') // login, register, invite
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [companyName, setCompanyName] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { login, register, isAuthenticated } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
-  if (isAuthenticated) return <Navigate to="/projects" />
+  // Check for invite token in URL
+  const inviteToken = searchParams.get('invite')
+
+  if (isAuthenticated && !inviteToken) return <Navigate to="/projects" />
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
 
-    if (isRegister && password !== confirmPassword) {
+    if (mode === 'register' && password !== confirmPassword) {
       setError('Passwords do not match')
+      return
+    }
+    if (mode === 'register' && !companyName.trim()) {
+      setError('Company name is required')
       return
     }
 
     setLoading(true)
     try {
-      if (isRegister) {
-        await register(email, password)
+      if (mode === 'register') {
+        await register(email, password, companyName)
+        navigate('/projects')
+      } else if (inviteToken) {
+        // Accept invite
+        const res = await authAPI.acceptInvite(inviteToken, password, email)
+        localStorage.setItem('authToken', res.data.access_token)
+        if (res.data.org_name) localStorage.setItem('orgName', res.data.org_name)
+        window.location.href = '/projects'
       } else {
         await login(email, password)
+        navigate('/projects')
       }
-      navigate('/projects')
     } catch (err) {
       setError(err.response?.data?.detail || 'Authentication failed. Please try again.')
     } finally {
@@ -47,7 +64,7 @@ export default function LoginPage() {
           </svg>
           <h2 className="mt-4 text-3xl font-extrabold text-gray-900">Roof Estimator</h2>
           <p className="mt-2 text-sm text-gray-600">
-            {isRegister ? 'Create your account' : 'Sign in to your account'}
+            {inviteToken ? 'Accept your team invite' : mode === 'register' ? 'Create your company account' : 'Sign in to your account'}
           </p>
         </div>
 
@@ -59,6 +76,22 @@ export default function LoginPage() {
           )}
 
           <div className="space-y-4">
+            {/* Company Name - only on register */}
+            {mode === 'register' && (
+              <div>
+                <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">Company Name</label>
+                <input
+                  id="companyName"
+                  type="text"
+                  required
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                  placeholder="Your Roofing Company"
+                />
+              </div>
+            )}
+
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email address</label>
               <input
@@ -83,7 +116,7 @@ export default function LoginPage() {
                 placeholder="Enter your password"
               />
             </div>
-            {isRegister && (
+            {mode === 'register' && (
               <div>
                 <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">Confirm Password</label>
                 <input
@@ -104,20 +137,22 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {loading ? 'Please wait...' : (isRegister ? 'Create Account' : 'Sign In')}
+            {loading ? 'Please wait...' : inviteToken ? 'Accept Invite & Sign In' : mode === 'register' ? 'Create Account' : 'Sign In'}
           </button>
 
-          <div className="text-center">
-            <button
-              type="button"
-              onClick={() => { setIsRegister(!isRegister); setError('') }}
-              className="text-sm text-primary-600 hover:text-primary-700"
-            >
-              {isRegister ? 'Already have an account? Sign in' : "Don't have an account? Register"}
-            </button>
-          </div>
+          {!inviteToken && (
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => { setMode(mode === 'register' ? 'login' : 'register'); setError('') }}
+                className="text-sm text-primary-600 hover:text-primary-700"
+              >
+                {mode === 'register' ? 'Already have an account? Sign in' : "Don't have an account? Register"}
+              </button>
+            </div>
+          )}
         </form>
       </div>
     </div>
   )
-    }
+}

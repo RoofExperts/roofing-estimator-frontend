@@ -38,7 +38,18 @@ export const authAPI = {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     })
   },
-  register: (email, password) => api.post('/register', { email, password }),
+  register: (email, password, companyName) => api.post('/register', { email, password, company_name: companyName }),
+  acceptInvite: (token, password, email) => api.post('/accept-invite', { token, password, email }),
+}
+
+// ============= ORGANIZATION / TEAM =============
+export const orgAPI = {
+  get: () => api.get('/api/v1/org'),
+  update: (data) => api.put('/api/v1/org', data),
+  members: () => api.get('/api/v1/org/members'),
+  invite: (email, role) => api.post('/api/v1/org/invite', { email, role }),
+  removeMember: (memberId) => api.delete(`/api/v1/org/members/${memberId}`),
+  invites: () => api.get('/api/v1/org/invites'),
 }
 
 // ============= PROJECTS =============
