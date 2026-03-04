@@ -100,6 +100,20 @@ export const proposalAPI = {
   defaults: (projectId) => api.get(`/api/v1/projects/${projectId}/proposal-defaults`),
 }
 
+// ============= ADMIN =============
+export const adminAPI = {
+  getCompany: () => api.get('/api/v1/admin/company'),
+  updateCompany: (data) => api.put('/api/v1/admin/company', data),
+  uploadLogo: (file) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post('/api/v1/admin/company/logo', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+  deleteLogo: () => api.delete('/api/v1/admin/company/logo'),
+}
+
 // ============= REFERENCE DATA =============
 export const referenceAPI = {
   conditionTypes: () => api.get('/api/v1/reference/condition-types'),
