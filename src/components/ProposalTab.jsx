@@ -957,62 +957,54 @@ export default function ProposalTab({ projectId, project }) {
         </div>
       )}
 
-      {/* Terms, Exclusions, Notes */}
-      {(terms.length > 0 || exclusions.length > 0 || notes.length > 0) && (
-        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
-          <h3 className="text-sm font-semibold text-gray-900">
-            Terms, Exclusions &amp; Notes
-            <span className="text-xs font-normal text-gray-400 ml-2">
-              (auto-filled from {proposalTypes[proposalType]?.label || proposalType} template — editable)
-            </span>
-          </h3>
+      {/* Terms, Exclusions, Notes — always visible, editable */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+        <h3 className="text-sm font-semibold text-gray-900">
+          Terms, Exclusions &amp; Notes
+          <span className="text-xs font-normal text-gray-400 ml-2">
+            (defaults from {proposalTypes[proposalType]?.label || proposalType} template — editable per proposal)
+          </span>
+        </h3>
 
-          {exclusions.length > 0 && (
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Exclusions ({exclusions.length})
-              </label>
-              <textarea
-                value={exclusions.join('\n')}
-                onChange={e => setExclusions(e.target.value.split('\n').filter(l => l.trim()))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                rows={Math.min(exclusions.length + 1, 8)}
-                placeholder="One exclusion per line..."
-              />
-            </div>
-          )}
-
-          {notes.length > 0 && (
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Notes ({notes.length})
-              </label>
-              <textarea
-                value={notes.join('\n')}
-                onChange={e => setNotes(e.target.value.split('\n').filter(l => l.trim()))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                rows={Math.min(notes.length + 1, 6)}
-                placeholder="One note per line..."
-              />
-            </div>
-          )}
-
-          {terms.length > 0 && (
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">
-                Terms &amp; Conditions ({terms.length})
-              </label>
-              <textarea
-                value={terms.join('\n')}
-                onChange={e => setTerms(e.target.value.split('\n').filter(l => l.trim()))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                rows={Math.min(terms.length + 1, 10)}
-                placeholder="One term per line..."
-              />
-            </div>
-          )}
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Exclusions {exclusions.length > 0 && `(${exclusions.length})`}
+          </label>
+          <textarea
+            value={exclusions.join('\n')}
+            onChange={e => setExclusions(e.target.value.split('\n').filter(l => l.trim()))}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            rows={Math.max(Math.min(exclusions.length + 1, 8), 3)}
+            placeholder="One exclusion per line..."
+          />
         </div>
-      )}
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Notes {notes.length > 0 && `(${notes.length})`}
+          </label>
+          <textarea
+            value={notes.join('\n')}
+            onChange={e => setNotes(e.target.value.split('\n').filter(l => l.trim()))}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            rows={Math.max(Math.min(notes.length + 1, 6), 3)}
+            placeholder="One note per line..."
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Terms &amp; Conditions {terms.length > 0 && `(${terms.length})`}
+          </label>
+          <textarea
+            value={terms.join('\n')}
+            onChange={e => setTerms(e.target.value.split('\n').filter(l => l.trim()))}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            rows={Math.max(Math.min(terms.length + 1, 10), 3)}
+            placeholder="One term per line..."
+          />
+        </div>
+      </div>
 
       {/* Batch Modal */}
       <BatchProposalModal

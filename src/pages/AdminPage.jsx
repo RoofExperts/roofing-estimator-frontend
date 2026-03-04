@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { adminAPI } from '../api'
+import { adminAPI, proposalTypeAPI } from '../api'
 
 // ── Editable List Component ──────────────────────────────────
 function EditableList({ label, items, onChange }) {
@@ -63,6 +63,14 @@ export default function AdminPage() {
   const [message, setMessage] = useState({ text: '', type: '' })
   const fileInputRef = useRef(null)
 
+  // Active proposal type tab for editing defaults
+  const [activeTypeTab, setActiveTypeTab] = useState('gc')
+  const [proposalTypeLabels, setProposalTypeLabels] = useState({
+    gc: 'GC / New Construction',
+    tenant_finish_out: 'Tenant Finish Out',
+    reroof: 'Re-Roof',
+  })
+
   // Form state
   const [form, setForm] = useState({
     name: '',
@@ -78,11 +86,30 @@ export default function AdminPage() {
     certifications: [],
     why_choose_us: [],
     default_terms: [],
+    proposal_type_defaults: {},
+    primary_color: '#1e40af',
+    secondary_color: '#475569',
+    accent_color: '#059669',
   })
 
   useEffect(() => {
     loadSettings()
+    loadProposalTypes()
   }, [])
+
+  const loadProposalTypes = async () => {
+    try {
+      const res = await proposalTypeAPI.list()
+      const types = res.data || {}
+      const labels = {}
+      for (const [key, val] of Object.entries(types)) {
+        labels[key] = val.label || key
+      }
+      if (Object.keys(labels).length > 0) setProposalTypeLabels(labels)
+    } catch (err) {
+      // Use fallback labels
+    }
+  }
 
   const loadSettings = async () => {
     try {
@@ -145,6 +172,23 @@ export default function AdminPage() {
 
   const updateField = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  const getTypeDefaults = (typeKey) => {
+    return form.proposal_type_defaults?.[typeKey] || {}
+  }
+
+  const updateTypeDefaults = (typeKey, field, value) => {
+    setForm(prev => ({
+      ...prev,
+      proposal_type_defaults: {
+        ...(prev.proposal_type_defaults || {}),
+        [typeKey]: {
+          ...(prev.proposal_type_defaults?.[typeKey] || {}),
+          [field]: value,
+        },
+      },
+    }))
   }
 
   if (loading) {
@@ -267,12 +311,138 @@ export default function AdminPage() {
           <EditableList label="Why Choose Us" items={form.why_choose_us || []} onChange={(v) => updateField('why_choose_us', v)} />
         </div>
 
-        {/* ── Terms & Conditions ── */}
+        {/* ── Proposal Type Defaults ── */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Default Terms &amp; Conditions</h2>
-          <p className="text-sm text-gray-500 mb-4">These terms will be included by default on every proposal. You can override them per-proposal.</p>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Proposal Type Defaults</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            Set master defaults for Terms &amp; Conditions, Exclusions, and Notes per proposal type.
+            These populate automatically when a type is selected — still editable per proposal.
+          </p>
 
-          <EditableList label="Terms" items={form.default_terms || []} onChange={(v) => updateField('default_terms', v)} />
+          {/* Type Tabs */}
+          <div className="flex border-b border-gray-200 mb-4">
+            {Object.entries(proposalTypeLabels).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setActiveTypeTab(key)}
+                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  activeTypeTab === key
+                    ? 'border-primary-600 text-primary-700'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Active Tab Content */}
+          <div className="space-y-4">
+            <EditableList
+              label={`${proposalTypeLabels[activeTypeTab]} — Terms & Conditions`}
+              items={getTypeDefaults(activeTypeTab).terms || []}
+              onChange={(v) => updateTypeDefaults(activeTypeTab, 'terms', v)}
+            />
+            <EditableList
+              label={`${proposalTypeLabels[activeTypeTab]} — Exclusions`}
+              items={getTypeDefaults(activeTypeTab).exclusions || []}
+              onChange={(v) => updateTypeDefaults(activeTypeTab, 'exclusions', v)}
+            />
+            <EditableList
+              label={`${proposalTypeLabels[activeTypeTab]} — Notes`}
+              items={getTypeDefaults(activeTypeTab).notes || []}
+              onChange={(v) => updateTypeDefaults(activeTypeTab, 'notes', v)}
+            />
+            <p className="text-xs text-gray-400 italic">
+              Leave empty to use the built-in defaults. Adding items here overrides the defaults for {proposalTypeLabels[activeTypeTab]} proposals.
+            </p>
+          </div>
+        </div>
+
+        {/* ── Brand Colors ── */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Brand Colors</h2>
+          <p className="text-sm text-gray-500 mb-4">Customize the colors used in your proposal PDFs and the app interface.</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Primary Color</label>
+              <p className="text-xs text-gray-400 mb-2">Headers, main headings, buttons</p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={form.primary_color || '#1e40af'}
+                  onChange={(e) => updateField('primary_color', e.target.value)}
+                  className="w-12 h-10 rounded border border-gray-300 cursor-pointer"
+                />
+                <input
+                  type="text"
+                  value={form.primary_color || '#1e40af'}
+                  onChange={(e) => updateField('primary_color', e.target.value)}
+                  className="w-28 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
+                  placeholder="#1e40af"
+                />
+                <div className="w-16 h-10 rounded" style={{ backgroundColor: form.primary_color || '#1e40af' }} />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Secondary Color</label>
+              <p className="text-xs text-gray-400 mb-2">Subheadings, table headers, accents</p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={form.secondary_color || '#475569'}
+                  onChange={(e) => updateField('secondary_color', e.target.value)}
+                  className="w-12 h-10 rounded border border-gray-300 cursor-pointer"
+                />
+                <input
+                  type="text"
+                  value={form.secondary_color || '#475569'}
+                  onChange={(e) => updateField('secondary_color', e.target.value)}
+                  className="w-28 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
+                  placeholder="#475569"
+                />
+                <div className="w-16 h-10 rounded" style={{ backgroundColor: form.secondary_color || '#475569' }} />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Accent Color</label>
+              <p className="text-xs text-gray-400 mb-2">Highlights, call-to-action, totals</p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={form.accent_color || '#059669'}
+                  onChange={(e) => updateField('accent_color', e.target.value)}
+                  className="w-12 h-10 rounded border border-gray-300 cursor-pointer"
+                />
+                <input
+                  type="text"
+                  value={form.accent_color || '#059669'}
+                  onChange={(e) => updateField('accent_color', e.target.value)}
+                  className="w-28 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
+                  placeholder="#059669"
+                />
+                <div className="w-16 h-10 rounded" style={{ backgroundColor: form.accent_color || '#059669' }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Color Preview Bar */}
+          <div className="mt-4 p-4 rounded-lg border border-gray-200 bg-gray-50">
+            <p className="text-xs text-gray-500 mb-2">Preview</p>
+            <div className="flex gap-2 items-center">
+              <div className="flex-1 h-8 rounded" style={{ backgroundColor: form.primary_color || '#1e40af' }}>
+                <span className="text-white text-xs font-semibold px-3 leading-8">ROOF EXPERTS</span>
+              </div>
+              <div className="flex-1 h-8 rounded" style={{ backgroundColor: form.secondary_color || '#475569' }}>
+                <span className="text-white text-xs px-3 leading-8">Section Header</span>
+              </div>
+              <div className="flex-1 h-8 rounded" style={{ backgroundColor: form.accent_color || '#059669' }}>
+                <span className="text-white text-xs font-bold px-3 leading-8">$125,000.00</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* ── Save Button ── */}
