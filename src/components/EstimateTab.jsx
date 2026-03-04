@@ -529,6 +529,407 @@ function printMaterialList(takeoff) {
 
 
 // ============================================================================
+// RECAP TAB — Final cost summary with tax, overhead, profit
+// ============================================================================
+function RecapTab({ takeoff, onRecapChange }) {
+  // Initialize recap from takeoff or defaults
+  const recap = takeoff.recap || {}
+
+  const defaultLines = () => {
+    const materialsAmt = (takeoff.flat_materials_total || 0) + (takeoff.metals_total || 0)
+    const laborAmt = takeoff.labor_total || 0
+    return [
+      { id: 'materials', label: 'Materials', amount: materialsAmt, taxable: true, editable: false },
+      { id: 'labor', label: 'Labor', amount: laborAmt, taxable: false, editable: false },
+      { id: 'subcontractors', label: 'Subcontractors', amount: recap.subcontractors_amount || 0, taxable: recap.subcontractors_taxable ?? false, editable: true },
+      { id: 'equipment', label: 'Equipment', amount: recap.equipment_amount || 0, taxable: recap.equipment_taxable ?? false, editable: true },
+    ]
+  }
+
+  // Merge stored recap values with computed totals
+  const lines = useMemo(() => {
+    const dl = defaultLines()
+    // Override taxable flags from saved recap
+    if (recap.lines) {
+      recap.lines.forEach(saved => {
+        const match = dl.find(l => l.id === saved.id)
+        if (match) {
+          match.taxable = saved.taxable
+          if (match.editable) match.amount = saved.amount
+        }
+      })
+    }
+    return dl
+  }, [takeoff])
+
+  const taxMode = recap.tax_mode || 'per_line' // 'per_line' or 'project_total'
+  const taxRate = recap.tax_rate ?? 8.25
+  const overheadPct = recap.overhead_pct ?? 0
+  const profitPct = recap.profit_pct ?? 0
+
+  // Any additional recap line items the user has added
+  const customLines = recap.custom_lines || []
+
+  const allLines = [...lines, ...customLines]
+
+  // Calculations
+  const subtotal = allLines.reduce((s, l) => s + (l.amount || 0), 0)
+
+  let taxableAmount = 0
+  if (taxMode === 'per_line') {
+    taxableAmount = allLines.filter(l => l.taxable).reduce((s, l) => s + (l.amount || 0), 0)
+  } else {
+    taxableAmount = subtotal
+  }
+  const salesTax = taxableAmount * (taxRate / 100)
+
+  const subtotalWithTax = subtotal + salesTax
+  const overheadAmount = subtotalWithTax * (overheadPct / 100)
+  const profitAmount = (subtotalWithTax + overheadAmount) * (profitPct / 100)
+  const grandTotal = subtotalWithTax + overheadAmount + profitAmount
+
+  const emitChange = (updates) => {
+    const newRecap = {
+      ...recap,
+      lines: (updates.lines || allLines).map(l => ({ id: l.id, label: l.label, amount: l.amount, taxable: l.taxable, editable: l.editable })),
+      custom_lines: updates.custom_lines !== undefined ? updates.custom_lines : customLines,
+      tax_mode: updates.tax_mode !== undefined ? updates.tax_mode : taxMode,
+      tax_rate: updates.tax_rate !== undefined ? updates.tax_rate : taxRate,
+      overhead_pct: updates.overhead_pct !== undefined ? updates.overhead_pct : overheadPct,
+      profit_pct: updates.profit_pct !== undefined ? updates.profit_pct : profitPct,
+      // Store computed totals for reference
+      computed_subtotal: subtotal,
+      computed_tax: salesTax,
+      computed_overhead: overheadAmount,
+      computed_profit: profitAmount,
+      computed_grand_total: grandTotal,
+    }
+    onRecapChange(newRecap)
+  }
+
+  const handleTaxableToggle = (lineId) => {
+    const updated = allLines.map(l => l.id === lineId ? { ...l, taxable: !l.taxable } : l)
+    const stdLines = updated.filter(l => !l._custom)
+    const custLines = updated.filter(l => l._custom)
+    emitChange({ lines: stdLines, custom_lines: custLines })
+  }
+
+  const handleAmountChange = (lineId, value) => {
+    const amt = parseFloat(value) || 0
+    const isCustom = customLines.find(l => l.id === lineId)
+    if (isCustom) {
+      const updated = customLines.map(l => l.id === lineId ? { ...l, amount: amt } : l)
+      emitChange({ custom_lines: updated })
+    } else {
+      // For editable standard lines, store in recap
+      const newRecap = { ...recap }
+      newRecap[`${lineId}_amount`] = amt
+      const updated = allLines.map(l => l.id === lineId ? { ...l, amount: amt } : l)
+      const stdLines = updated.filter(l => !l._custom)
+      emitChange({ lines: stdLines })
+    }
+  }
+
+  const handleAddCustomLine = () => {
+    const id = `custom_${Date.now()}`
+    const newLine = { id, label: 'New Item', amount: 0, taxable: false, editable: true, _custom: true }
+    emitChange({ custom_lines: [...customLines, newLine] })
+  }
+
+  const handleDeleteCustomLine = (lineId) => {
+    emitChange({ custom_lines: customLines.filter(l => l.id !== lineId) })
+  }
+
+  const handleCustomLabelChange = (lineId, label) => {
+    const updated = customLines.map(l => l.id === lineId ? { ...l, label } : l)
+    emitChange({ custom_lines: updated })
+  }
+
+  return (
+    <div className="space-y-6">
+      <h3 className="text-base font-bold text-gray-800 uppercase">Project Recap</h3>
+
+      {/* Tax Mode Toggle */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Sales Tax Method</h4>
+          <div className="flex bg-gray-100 rounded-lg p-0.5">
+            <button
+              onClick={() => emitChange({ tax_mode: 'per_line' })}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                taxMode === 'per_line' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >Per Line Item</button>
+            <button
+              onClick={() => emitChange({ tax_mode: 'project_total' })}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                taxMode === 'project_total' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >Entire Project</button>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-600">Tax Rate:</label>
+          <input
+            type="number"
+            value={taxRate}
+            onChange={e => emitChange({ tax_rate: parseFloat(e.target.value) || 0 })}
+            className="w-20 px-2 py-1 text-sm font-mono border border-gray-300 rounded bg-yellow-50 focus:bg-yellow-100 focus:outline-none focus:ring-1 focus:ring-yellow-400 text-right"
+            step="0.01" min="0" max="25"
+          />
+          <span className="text-sm text-gray-500">%</span>
+        </div>
+        {taxMode === 'per_line' && (
+          <p className="text-xs text-gray-400 mt-2">Toggle the "Tax" checkbox on each line item to apply sales tax selectively.</p>
+        )}
+        {taxMode === 'project_total' && (
+          <p className="text-xs text-gray-400 mt-2">Sales tax will be applied to the entire project subtotal regardless of individual line settings.</p>
+        )}
+      </div>
+
+      {/* Line Items Table */}
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <table className="min-w-full">
+          <thead>
+            <tr className="bg-gray-100 border-b border-gray-300">
+              {taxMode === 'per_line' && (
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 w-12">Tax</th>
+              )}
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">Description</th>
+              <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 w-40">Amount</th>
+              {taxMode === 'per_line' && (
+                <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 w-28">Tax Amount</th>
+              )}
+              <th className="px-2 py-2.5 w-8"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {/* Standard lines */}
+            {lines.map(line => (
+              <tr key={line.id} className="border-b border-gray-100 hover:bg-gray-50">
+                {taxMode === 'per_line' && (
+                  <td className="px-3 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={line.taxable}
+                      onChange={() => handleTaxableToggle(line.id)}
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                  </td>
+                )}
+                <td className="px-4 py-2 text-sm font-medium text-gray-900">{line.label}</td>
+                <td className="px-4 py-2 text-right">
+                  {line.editable ? (
+                    <input
+                      type="number"
+                      value={line.amount}
+                      onChange={e => handleAmountChange(line.id, e.target.value)}
+                      className="w-32 px-2 py-1 text-right font-mono text-sm border border-gray-300 rounded bg-yellow-50 focus:bg-yellow-100 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                      step="0.01" min="0"
+                    />
+                  ) : (
+                    <span className="text-sm font-mono font-medium text-gray-900">{fmt(line.amount)}</span>
+                  )}
+                </td>
+                {taxMode === 'per_line' && (
+                  <td className="px-3 py-2 text-right text-sm font-mono text-gray-500">
+                    {line.taxable ? fmt(line.amount * (taxRate / 100)) : '—'}
+                  </td>
+                )}
+                <td></td>
+              </tr>
+            ))}
+
+            {/* Custom lines */}
+            {customLines.map(line => (
+              <tr key={line.id} className="border-b border-gray-100 hover:bg-gray-50 bg-blue-50/30">
+                {taxMode === 'per_line' && (
+                  <td className="px-3 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={line.taxable}
+                      onChange={() => handleTaxableToggle(line.id)}
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                  </td>
+                )}
+                <td className="px-4 py-2">
+                  <input
+                    type="text"
+                    value={line.label}
+                    onChange={e => handleCustomLabelChange(line.id, e.target.value)}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  />
+                </td>
+                <td className="px-4 py-2 text-right">
+                  <input
+                    type="number"
+                    value={line.amount}
+                    onChange={e => handleAmountChange(line.id, e.target.value)}
+                    className="w-32 px-2 py-1 text-right font-mono text-sm border border-gray-300 rounded bg-yellow-50 focus:bg-yellow-100 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                    step="0.01" min="0"
+                  />
+                </td>
+                {taxMode === 'per_line' && (
+                  <td className="px-3 py-2 text-right text-sm font-mono text-gray-500">
+                    {line.taxable ? fmt(line.amount * (taxRate / 100)) : '—'}
+                  </td>
+                )}
+                <td className="px-2 py-2 text-center">
+                  <button onClick={() => handleDeleteCustomLine(line.id)}
+                    className="text-gray-300 hover:text-red-500 transition-colors" title="Remove">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+
+          {/* Totals */}
+          <tfoot>
+            {/* Subtotal */}
+            <tr className="bg-gray-50 border-t border-gray-200">
+              <td colSpan={taxMode === 'per_line' ? 2 : 1} className="px-4 py-2.5 text-sm font-semibold text-gray-700 text-right">
+                SUBTOTAL
+              </td>
+              <td className="px-4 py-2.5 text-sm font-bold text-gray-900 text-right font-mono">{fmt(subtotal)}</td>
+              {taxMode === 'per_line' && <td></td>}
+              <td></td>
+            </tr>
+
+            {/* Sales Tax */}
+            <tr className="bg-gray-50">
+              <td colSpan={taxMode === 'per_line' ? 2 : 1} className="px-4 py-2 text-sm text-gray-600 text-right">
+                Sales Tax ({taxRate}%){taxMode === 'per_line' ? ` on ${fmt(taxableAmount)} taxable` : ''}
+              </td>
+              <td className="px-4 py-2 text-sm font-medium text-gray-900 text-right font-mono">{fmt(salesTax)}</td>
+              {taxMode === 'per_line' && <td></td>}
+              <td></td>
+            </tr>
+
+            {/* Subtotal with Tax */}
+            <tr className="bg-gray-100 border-t border-gray-300">
+              <td colSpan={taxMode === 'per_line' ? 2 : 1} className="px-4 py-2.5 text-sm font-semibold text-gray-700 text-right">
+                SUBTOTAL WITH TAX
+              </td>
+              <td className="px-4 py-2.5 text-sm font-bold text-gray-900 text-right font-mono">{fmt(subtotalWithTax)}</td>
+              {taxMode === 'per_line' && <td></td>}
+              <td></td>
+            </tr>
+
+            {/* Overhead */}
+            <tr className="bg-gray-50">
+              <td colSpan={taxMode === 'per_line' ? 2 : 1} className="px-4 py-2 text-right">
+                <div className="flex items-center justify-end gap-2">
+                  <span className="text-sm text-gray-600">Overhead</span>
+                  <input
+                    type="number"
+                    value={overheadPct}
+                    onChange={e => emitChange({ overhead_pct: parseFloat(e.target.value) || 0 })}
+                    className="w-16 px-1.5 py-1 text-right font-mono text-sm border border-gray-300 rounded bg-orange-50 focus:bg-orange-100 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    step="0.5" min="0" max="100"
+                  />
+                  <span className="text-sm text-gray-500">%</span>
+                </div>
+              </td>
+              <td className="px-4 py-2 text-sm font-medium text-gray-900 text-right font-mono">{fmt(overheadAmount)}</td>
+              {taxMode === 'per_line' && <td></td>}
+              <td></td>
+            </tr>
+
+            {/* Profit */}
+            <tr className="bg-gray-50">
+              <td colSpan={taxMode === 'per_line' ? 2 : 1} className="px-4 py-2 text-right">
+                <div className="flex items-center justify-end gap-2">
+                  <span className="text-sm text-gray-600">Profit</span>
+                  <input
+                    type="number"
+                    value={profitPct}
+                    onChange={e => emitChange({ profit_pct: parseFloat(e.target.value) || 0 })}
+                    className="w-16 px-1.5 py-1 text-right font-mono text-sm border border-gray-300 rounded bg-green-50 focus:bg-green-100 focus:outline-none focus:ring-1 focus:ring-green-400"
+                    step="0.5" min="0" max="100"
+                  />
+                  <span className="text-sm text-gray-500">%</span>
+                </div>
+              </td>
+              <td className="px-4 py-2 text-sm font-medium text-gray-900 text-right font-mono">{fmt(profitAmount)}</td>
+              {taxMode === 'per_line' && <td></td>}
+              <td></td>
+            </tr>
+
+            {/* Grand Total */}
+            <tr className="bg-gradient-to-r from-blue-50 to-blue-100 border-t-2 border-blue-300">
+              <td colSpan={taxMode === 'per_line' ? 2 : 1} className="px-4 py-3 text-right">
+                <span className="text-base font-bold text-gray-900">BID TOTAL</span>
+              </td>
+              <td className="px-4 py-3 text-right">
+                <span className="text-lg font-bold text-blue-700 font-mono">{fmt(grandTotal)}</span>
+              </td>
+              {taxMode === 'per_line' && <td></td>}
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {/* Add line item */}
+      <div className="flex justify-start">
+        <button onClick={handleAddCustomLine}
+          className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors">
+          <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Add Line Item
+        </button>
+      </div>
+
+      {/* Breakdown summary card */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">Bid Breakdown</h4>
+        <div className="space-y-1.5 text-sm">
+          {allLines.map(l => (
+            <div key={l.id} className="flex justify-between">
+              <span className="text-gray-600">{l.label}{l.taxable && taxMode === 'per_line' ? ' *' : ''}</span>
+              <span className="font-mono text-gray-900">{fmt(l.amount)}</span>
+            </div>
+          ))}
+          <div className="border-t border-gray-200 pt-1.5 flex justify-between font-medium">
+            <span className="text-gray-700">Subtotal</span>
+            <span className="font-mono text-gray-900">{fmt(subtotal)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-600">Sales Tax ({taxRate}%)</span>
+            <span className="font-mono text-gray-900">{fmt(salesTax)}</span>
+          </div>
+          {overheadPct > 0 && (
+            <div className="flex justify-between">
+              <span className="text-gray-600">Overhead ({overheadPct}%)</span>
+              <span className="font-mono text-gray-900">{fmt(overheadAmount)}</span>
+            </div>
+          )}
+          {profitPct > 0 && (
+            <div className="flex justify-between">
+              <span className="text-gray-600">Profit ({profitPct}%)</span>
+              <span className="font-mono text-gray-900">{fmt(profitAmount)}</span>
+            </div>
+          )}
+          <div className="border-t-2 border-gray-300 pt-2 flex justify-between">
+            <span className="text-base font-bold text-gray-900">BID TOTAL</span>
+            <span className="text-base font-bold text-blue-700 font-mono">{fmt(grandTotal)}</span>
+          </div>
+        </div>
+        {taxMode === 'per_line' && (
+          <p className="text-xs text-gray-400 mt-2">* Taxable line items</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+
+// ============================================================================
 // MAIN ESTIMATE TAB
 // ============================================================================
 export default function EstimateTab({ projectId }) {
@@ -693,12 +1094,27 @@ export default function EstimateTab({ projectId }) {
     })
   }
 
+  // ---- Recap change handler ----
+  const handleRecapChange = (newRecap) => {
+    setTakeoff(prev => {
+      const updated = JSON.parse(JSON.stringify(prev))
+      updated.recap = newRecap
+      // Update the grand total in summary to reflect recap bid total
+      if (updated.summary?.cost_summary && newRecap.computed_grand_total != null) {
+        updated.summary.cost_summary.grand_total = newRecap.computed_grand_total
+      }
+      debouncedSave(updated)
+      return updated
+    })
+  }
+
   const tabs = [
     { id: 'summary', label: 'Project Summary' },
     { id: 'materials', label: 'Flat Roof Materials' },
     { id: 'metals', label: 'Roof Related Metals' },
     { id: 'labor', label: 'Labor & General Conditions' },
     { id: 'quantities', label: 'Total Quantities' },
+    { id: 'recap', label: 'Recap' },
   ]
 
   if (loadingInitial) {
@@ -784,8 +1200,12 @@ export default function EstimateTab({ projectId }) {
           {/* Grand Total Banner */}
           <div className="mb-4 bg-gradient-to-r from-blue-600 to-blue-800 rounded-lg p-4 flex items-center justify-between text-white">
             <div>
-              <p className="text-xs text-blue-200 uppercase tracking-wider">Grand Total</p>
-              <p className="text-2xl font-bold">{fmt(takeoff.summary?.cost_summary?.grand_total)}</p>
+              <p className="text-xs text-blue-200 uppercase tracking-wider">
+                {takeoff.recap?.computed_grand_total ? 'Bid Total' : 'Grand Total'}
+              </p>
+              <p className="text-2xl font-bold">
+                {fmt(takeoff.recap?.computed_grand_total || takeoff.summary?.cost_summary?.grand_total)}
+              </p>
             </div>
             <div className="flex gap-6 text-right">
               <div>
@@ -796,6 +1216,18 @@ export default function EstimateTab({ projectId }) {
                 <p className="text-xs text-blue-200">Labor</p>
                 <p className="text-sm font-semibold">{fmt(takeoff.labor_total)}</p>
               </div>
+              {takeoff.recap?.overhead_pct > 0 && (
+                <div>
+                  <p className="text-xs text-blue-200">OH {takeoff.recap.overhead_pct}%</p>
+                  <p className="text-sm font-semibold">{fmt(takeoff.recap.computed_overhead)}</p>
+                </div>
+              )}
+              {takeoff.recap?.profit_pct > 0 && (
+                <div>
+                  <p className="text-xs text-blue-200">Profit {takeoff.recap.profit_pct}%</p>
+                  <p className="text-sm font-semibold">{fmt(takeoff.recap.computed_profit)}</p>
+                </div>
+              )}
               <div>
                 <p className="text-xs text-blue-200">System</p>
                 <p className="text-sm font-semibold">{takeoff.summary?.system_type}</p>
@@ -883,6 +1315,10 @@ export default function EstimateTab({ projectId }) {
                 </p>
                 <QuantitySummary takeoff={takeoff} />
               </div>
+            )}
+
+            {activeTab === 'recap' && (
+              <RecapTab takeoff={takeoff} onRecapChange={handleRecapChange} />
             )}
           </div>
         </div>
