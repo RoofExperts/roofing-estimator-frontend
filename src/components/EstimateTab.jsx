@@ -8,7 +8,7 @@ const fmtNum = (v) => v != null ? Number(v).toLocaleString() : '—'
 // ============================================================================
 // MATERIAL TABLE - Reusable table for each page's material groups
 // ============================================================================
-function MaterialTable({ groups, pageTotal, pageTotalLabel }) {
+function MaterialTable({ groups, pageTotal, pageTotalLabel, onEdit, tabKey }) {
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
       <table className="min-w-full">
@@ -24,7 +24,7 @@ function MaterialTable({ groups, pageTotal, pageTotalLabel }) {
         </thead>
         <tbody>
           {groups.map((group, gi) => (
-            <GroupRows key={gi} group={group} />
+            <GroupRows key={gi} group={group} groupIndex={gi} onEdit={onEdit} tabKey={tabKey} />
           ))}
         </tbody>
         <tfoot>
@@ -40,8 +40,19 @@ function MaterialTable({ groups, pageTotal, pageTotalLabel }) {
   )
 }
 
-function GroupRows({ group }) {
+function GroupRows({ group, groupIndex, onEdit, tabKey }) {
   if (!group.items || group.items.length === 0) return null
+
+  const handleQtyChange = (itemIndex, value) => {
+    const numValue = parseFloat(value) || 0
+    onEdit(tabKey, groupIndex, itemIndex, 'qty', numValue)
+  }
+
+  const handleUnitCostChange = (itemIndex, value) => {
+    const numValue = parseFloat(value) || 0
+    onEdit(tabKey, groupIndex, itemIndex, 'unit_cost', numValue)
+  }
+
   return (
     <>
       {/* Category header row */}
@@ -56,14 +67,27 @@ function GroupRows({ group }) {
           <td className="px-4 py-2 text-sm text-gray-500 text-center">{item.line}</td>
           <td className="px-4 py-2 text-sm text-gray-900">{item.description}</td>
           <td className="px-4 py-2 text-sm text-gray-700 text-right font-mono">
-            {typeof item.qty === 'number' ? fmtNum(item.qty) : item.qty}
+            <input
+              type="number"
+              value={typeof item.qty === 'number' ? item.qty : 0}
+              onChange={(e) => handleQtyChange(idx, e.target.value)}
+              className="w-16 px-2 py-1 text-right font-mono text-sm border border-gray-300 rounded bg-yellow-50 focus:bg-yellow-100 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+              step="0.01"
+            />
           </td>
           <td className="px-4 py-2 text-sm text-gray-500">{item.unit}</td>
           <td className="px-4 py-2 text-sm text-gray-700 text-right font-mono">
-            {item.unit_cost > 0 ? fmt(item.unit_cost) : (item.note || '$0.00')}
+            <input
+              type="number"
+              value={item.unit_cost || 0}
+              onChange={(e) => handleUnitCostChange(idx, e.target.value)}
+              className="w-24 px-2 py-1 text-right font-mono text-sm border border-gray-300 rounded bg-yellow-50 focus:bg-yellow-100 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+              step="0.01"
+              min="0"
+            />
           </td>
           <td className="px-4 py-2 text-sm font-medium text-gray-900 text-right font-mono">
-            {fmt(item.extended)}
+            {fmt(item.extended || 0)}
           </td>
         </tr>
       ))}
@@ -201,6 +225,61 @@ export default function EstimateTab({ projectId }) {
     }
   }
 
+  // Handle editing items in takeoff tables
+  const handleItemEdit = (tabKey, groupIndex, itemIndex, field, value) => {
+    setTakeoff(prevTakeoff => {
+      const updated = JSON.parse(JSON.stringify(prevTakeoff)) // Deep clone
+      const groups = updated[tabKey] || []
+
+      if (!groups[groupIndex] || !groups[groupIndex].items) return prevTakeoff
+
+      const item = groups[groupIndex].items[itemIndex]
+      if (!item) return prevTakeoff
+
+      // Update the field
+      item[field] = value
+
+      // Recalculate extended cost
+      item.extended = (item.qty || 0) * (item.unit_cost || 0)
+
+      // Recalculate group total
+      if (groups[groupIndex].items) {
+        groups[groupIndex].total = groups[groupIndex].items.reduce((sum, it) => sum + (it.extended || 0), 0)
+      }
+
+      // Recalculate page totals
+      const flatTotal = updated.flat_materials?.reduce((sum, group) => sum + (group.total || 0), 0) || 0
+      const metalsTotal = updated.metals?.reduce((sum, group) => sum + (group.total || 0), 0) || 0
+      const laborTotal = updated.labor?.reduce((sum, group) => sum + (group.total || 0), 0) || 0
+
+      updated.flat_materials_total = flatTotal
+      updated.metals_total = metalsTotal
+      updated.labor_total = laborTotal
+
+      // Recalculate cost summary
+      const subtotal = flatTotal + metalsTotal + laborTotal + (updated.warranty_cost || 0)
+      const markupPct = updated.summary?.cost_summary?.markup_pct || 0.25
+      const markup = subtotal * markupPct
+      const subtotalWithMarkup = subtotal + markup
+      const taxPct = updated.summary?.cost_summary?.tax_pct || 0.0825
+      const tax = subtotalWithMarkup * taxPct
+      const grandTotal = subtotalWithMarkup + tax
+
+      if (updated.summary && updated.summary.cost_summary) {
+        updated.summary.cost_summary.flat_materials = flatTotal
+        updated.summary.cost_summary.metals = metalsTotal
+        updated.summary.cost_summary.labor = laborTotal
+        updated.summary.cost_summary.subtotal = subtotal
+        updated.summary.cost_summary.markup = markup
+        updated.summary.cost_summary.subtotal_with_markup = subtotalWithMarkup
+        updated.summary.cost_summary.tax = tax
+        updated.summary.cost_summary.grand_total = grandTotal
+      }
+
+      return updated
+    })
+  }
+
   const tabs = [
     { id: 'summary', label: 'Project Summary' },
     { id: 'materials', label: 'Flat Roof Materials' },
@@ -312,6 +391,8 @@ export default function EstimateTab({ projectId }) {
                   groups={takeoff.flat_materials || []}
                   pageTotal={takeoff.flat_materials_total}
                   pageTotalLabel="PAGE 2 TOTAL:"
+                  onEdit={handleItemEdit}
+                  tabKey="flat_materials"
                 />
               </div>
             )}
@@ -323,6 +404,8 @@ export default function EstimateTab({ projectId }) {
                   groups={takeoff.metals || []}
                   pageTotal={takeoff.metals_total}
                   pageTotalLabel="PAGE 3 TOTAL:"
+                  onEdit={handleItemEdit}
+                  tabKey="metals"
                 />
               </div>
             )}
@@ -334,6 +417,8 @@ export default function EstimateTab({ projectId }) {
                   groups={takeoff.labor || []}
                   pageTotal={takeoff.labor_total}
                   pageTotalLabel="PAGE 4 TOTAL:"
+                  onEdit={handleItemEdit}
+                  tabKey="labor"
                 />
                 {/* Warranty line */}
                 {takeoff.warranty_cost > 0 && (
