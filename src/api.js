@@ -92,6 +92,14 @@ export const estimateAPI = {
   get: (projectId) => api.get(`/api/v1/projects/${projectId}/estimate`),
 }
 
+// ============= PROPOSALS =============
+export const proposalAPI = {
+  generate: (projectId, data) => api.post(`/api/v1/projects/${projectId}/generate-proposal`, data, {
+    responseType: 'blob'
+  }),
+  defaults: (projectId) => api.get(`/api/v1/projects/${projectId}/proposal-defaults`),
+}
+
 // ============= REFERENCE DATA =============
 export const referenceAPI = {
   conditionTypes: () => api.get('/api/v1/reference/condition-types'),
