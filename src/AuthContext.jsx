@@ -31,6 +31,7 @@ export function AuthProvider({ children }) {
           id: payload.user_id,
           email: payload.sub,
           role: payload.role || 'estimator',
+          is_superadmin: payload.is_superadmin || false,
         })
         setOrg({
           id: payload.org_id,
@@ -109,6 +110,7 @@ export function AuthProvider({ children }) {
     isAuthenticated: !!token,
     isOwner: user?.role === 'owner',
     isAdmin: user?.role === 'owner' || user?.role === 'admin',
+    isSuperadmin: user?.is_superadmin || false,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

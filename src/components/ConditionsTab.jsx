@@ -603,7 +603,7 @@ export default function ConditionsTab({ projectId }) {
             <div className="mt-3 flex items-center gap-3">
               <label className="text-xs font-medium text-blue-800">Roofing System:</label>
               <div className="flex gap-1">
-                {['TPO', 'EPDM', 'PVC'].map(sys => {
+                {['TPO', 'EPDM', 'PVC', 'ModBit', 'BUR', 'StandingSeam'].map(sys => {
                   const isActive = (projectData?.system_type || '').toUpperCase() === sys
                   return (
                     <button

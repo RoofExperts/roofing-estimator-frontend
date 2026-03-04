@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { planAPI } from '../api'
 import { LoadingSpinner, StatusBadge } from './common'
-import PdfViewer from './PdfViewer'
+import PdfMarkupViewer from './PdfMarkupViewer'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://roof-estimator-backend.onrender.com'
 
@@ -17,6 +17,7 @@ export default function PlansTab({ projectId }) {
   const fileInputRef = useRef(null)
   const [dragOver, setDragOver] = useState(false)
   const [viewingPlan, setViewingPlan] = useState(null)
+  const [viewMode, setViewMode] = useState('markup') // 'markup' or 'basic'
 
   const fetchPlans = async () => {
     try {
@@ -73,7 +74,10 @@ export default function PlansTab({ projectId }) {
     try {
       await planAPI.updateExtraction(extractionId, { value: parseFloat(editValue) })
       setEditingExtraction(null)
-      if (expandedPlan) fetchExtractions(expandedPlan)
+      if (expandedPlan) {
+        setExpandedPlan(null)
+        setTimeout(() => fetchExtractions(expandedPlan), 100)
+      }
     } catch (err) {
       setError('Failed to update extraction')
     }
@@ -89,9 +93,14 @@ export default function PlansTab({ projectId }) {
     }
   }
 
-  // Use backend proxy URL to avoid S3 CORS issues
   const getPlanProxyUrl = (plan) => {
     return `${API_BASE_URL}/plans/${plan.id}/file`
+  }
+
+  const handleSaveMeasurements = (measurements) => {
+    // TODO: save measurements to backend
+    console.log('Measurements to save:', measurements)
+    alert(`Saved ${measurements.length} measurement(s):\n${measurements.map(m => `Page ${m.page}: ${m.formatted}`).join('\n')}`)
   }
 
   if (loading) return <LoadingSpinner />
@@ -105,20 +114,32 @@ export default function PlansTab({ projectId }) {
         </div>
       )}
 
+      {/* Plan Viewer */}
       {viewingPlan && (
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-medium text-gray-700">
-              Viewing: {viewingPlan.filename || `Plan #${viewingPlan.id}`}
-            </h3>
+            <div className="flex items-center gap-3">
+              <h3 className="text-sm font-medium text-gray-700">
+                {viewingPlan.filename || `Plan #${viewingPlan.id}`}
+              </h3>
+              <span className="text-xs text-gray-400">|</span>
+              <span className="text-xs text-gray-500">
+                Click "Set Scale" in toolbar, then pick 2 points of a known dimension to enable real measurements
+              </span>
+            </div>
             <button onClick={() => setViewingPlan(null)} className="text-sm text-gray-500 hover:text-gray-700">
               Close Viewer
             </button>
           </div>
-          <PdfViewer url={getPlanProxyUrl(viewingPlan)} onClose={() => setViewingPlan(null)} />
+          <PdfMarkupViewer
+            url={getPlanProxyUrl(viewingPlan)}
+            onClose={() => setViewingPlan(null)}
+            onSaveMeasurements={handleSaveMeasurements}
+          />
         </div>
       )}
 
+      {/* Upload area */}
       <div
         onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
@@ -145,6 +166,7 @@ export default function PlansTab({ projectId }) {
         />
       </div>
 
+      {/* Plans List */}
       <div className="space-y-3">
         {plans.map((plan) => (
           <div key={plan.id} className="border border-gray-200 rounded-lg overflow-hidden">
@@ -172,7 +194,7 @@ export default function PlansTab({ projectId }) {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                   </svg>
-                  {viewingPlan?.id === plan.id ? 'Hide' : 'View Plan'}
+                  {viewingPlan?.id === plan.id ? 'Hide' : 'View & Markup'}
                 </button>
                 <StatusBadge status={plan.status} />
                 <svg className={`w-5 h-5 text-gray-400 transform transition-transform ${expandedPlan === plan.id ? 'rotate-180' : ''}`}
@@ -240,4 +262,4 @@ export default function PlansTab({ projectId }) {
       </div>
     </div>
   )
-         }
+}

@@ -6,6 +6,7 @@ import ProjectDetailPage from './pages/ProjectDetailPage'
 import AdminPage from './pages/AdminPage'
 import MaterialDatabasePage from './pages/MaterialDatabasePage'
 import TeamPage from './pages/TeamPage'
+import PlatformAdminPage from './pages/PlatformAdminPage'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth()
@@ -14,7 +15,7 @@ function ProtectedRoute({ children }) {
 }
 
 function Layout({ children }) {
-  const { logout, user, org, isAdmin } = useAuth()
+  const { logout, user, org, isAdmin, isSuperadmin } = useAuth()
   const location = useLocation()
 
   return (
@@ -81,6 +82,21 @@ function Layout({ children }) {
                   </Link>
                 </>
               )}
+              {isSuperadmin && (
+                <Link
+                  to="/platform-admin"
+                  className={`text-sm px-3 py-2 rounded-md transition-colors flex items-center gap-1 ${
+                    location.pathname === '/platform-admin'
+                      ? 'text-indigo-700 bg-indigo-50 font-medium'
+                      : 'text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Platform
+                </Link>
+              )}
               <div className="mx-2 h-6 w-px bg-gray-200"></div>
               <span className="text-xs text-gray-400 px-1">
                 {user?.email}
@@ -146,6 +162,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Layout><AdminPage /></Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/platform-admin"
+        element={
+          <ProtectedRoute>
+            <Layout><PlatformAdminPage /></Layout>
           </ProtectedRoute>
         }
       />
