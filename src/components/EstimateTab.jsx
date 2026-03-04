@@ -1,98 +1,313 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { estimateAPI } from '../api'
 import { LoadingSpinner } from './common'
 
 const fmt = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0)
 const fmtNum = (v) => v != null ? Number(v).toLocaleString() : '—'
 
+
 // ============================================================================
-// MATERIAL TABLE - Reusable table for each page's material groups
+// QUANTITY SUMMARY — Shows total estimated qty per item across all groups
 // ============================================================================
-function MaterialTable({ groups, pageTotal, pageTotalLabel, onEdit, tabKey }) {
+function QuantitySummary({ takeoff }) {
+  // Aggregate quantities by base description across all material groups
+  const aggregated = useMemo(() => {
+    if (!takeoff) return []
+    const map = {}
+    const allGroups = [
+      ...(takeoff.flat_materials || []),
+      ...(takeoff.metals || []),
+      ...(takeoff.labor || []),
+    ]
+    allGroups.forEach(group => {
+      (group.items || []).forEach(item => {
+        if (!item.qty || item.qty <= 0) return
+        const key = `${item.description}||${item.unit}`
+        if (!map[key]) {
+          map[key] = { description: item.description, unit: item.unit, totalQty: 0 }
+        }
+        map[key].totalQty += item.qty
+      })
+    })
+    return Object.values(map).sort((a, b) => b.totalQty - a.totalQty)
+  }, [takeoff])
+
+  if (aggregated.length === 0) return null
+
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <table className="min-w-full">
-        <thead>
-          <tr className="bg-gray-100 border-b border-gray-300">
-            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 w-12">#</th>
-            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">Description</th>
-            <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 w-20">Qty</th>
-            <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 w-20">Unit</th>
-            <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 w-28">Unit Cost</th>
-            <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 w-32">Extended Cost</th>
-          </tr>
-        </thead>
-        <tbody>
-          {groups.map((group, gi) => (
-            <GroupRows key={gi} group={group} groupIndex={gi} onEdit={onEdit} tabKey={tabKey} />
-          ))}
-        </tbody>
-        <tfoot>
-          <tr className="bg-gray-100 border-t-2 border-gray-300">
-            <td colSpan={5} className="px-4 py-3 text-sm font-bold text-gray-700 text-right">
-              {pageTotalLabel || 'PAGE TOTAL:'}
-            </td>
-            <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">{fmt(pageTotal)}</td>
-          </tr>
-        </tfoot>
-      </table>
+      <div className="bg-purple-50 px-4 py-2.5 border-b border-purple-200">
+        <h4 className="text-xs font-bold text-purple-800 uppercase tracking-wider">Total Estimated Quantities</h4>
+      </div>
+      <div className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
+        {aggregated.map((item, i) => (
+          <div key={i} className="flex items-center justify-between px-4 py-1.5 text-sm hover:bg-gray-50">
+            <span className="text-gray-700">{item.description}</span>
+            <span className="font-mono font-semibold text-gray-900 ml-4 whitespace-nowrap">
+              {fmtNum(Math.ceil(item.totalQty))} {item.unit}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
 
-function GroupRows({ group, groupIndex, onEdit, tabKey }) {
+
+// ============================================================================
+// ADD ITEM MODAL
+// ============================================================================
+function AddItemModal({ onAdd, onClose, groups }) {
+  const [description, setDescription] = useState('')
+  const [qty, setQty] = useState('')
+  const [unit, setUnit] = useState('EA')
+  const [unitCost, setUnitCost] = useState('')
+  const [targetGroup, setTargetGroup] = useState(0)
+  const [inStock, setInStock] = useState(false)
+
+  const [wastePct, setWastePct] = useState(0)
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (!description.trim()) return
+    const q = parseFloat(qty) || 0
+    const uc = parseFloat(unitCost) || 0
+    const wp = parseFloat(wastePct) || 0
+    onAdd(targetGroup, {
+      description: description.trim(),
+      qty: q,
+      unit,
+      unit_cost: uc,
+      waste_pct: wp,
+      extended: q * (1 + wp / 100) * uc,
+      in_stock: inStock,
+    })
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 p-6" onClick={e => e.stopPropagation()}>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Line Item</h3>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
+            <select value={targetGroup} onChange={e => setTargetGroup(parseInt(e.target.value))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+              {groups.map((g, i) => (
+                <option key={i} value={i}>{g.category}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
+            <input type="text" value={description} onChange={e => setDescription(e.target.value)}
+              placeholder="e.g., 6&quot; #14 HD Screws"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              autoFocus required />
+          </div>
+          <div className="grid grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Qty</label>
+              <input type="number" value={qty} onChange={e => setQty(e.target.value)} step="0.01" min="0"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Unit</label>
+              <select value={unit} onChange={e => setUnit(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                {['EA', 'SQ', 'SF', 'LF', 'ROLL', 'PAIL', 'TUBE', 'BAG', 'BDL', 'CTN', 'GAL', 'HR', 'DAY', 'LS', 'SET'].map(u => (
+                  <option key={u} value={u}>{u}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Waste %</label>
+              <input type="number" value={wastePct} onChange={e => setWastePct(e.target.value)} step="1" min="0" max="100"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Unit Cost</label>
+              <input type="number" value={unitCost} onChange={e => setUnitCost(e.target.value)} step="0.01" min="0"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={inStock} onChange={e => setInStock(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500" />
+            <span className="text-sm text-gray-700">In warehouse stock</span>
+          </label>
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+            <button type="submit"
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+              Add Item
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+
+// ============================================================================
+// MATERIAL TABLE
+// ============================================================================
+function MaterialTable({ groups, pageTotal, pageTotalLabel, onEdit, onDelete, onAdd, onToggleStock, tabKey, showAddModal, setShowAddModal }) {
+  return (
+    <div>
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <table className="min-w-full">
+          <thead>
+            <tr className="bg-gray-100 border-b border-gray-300">
+              <th className="px-2 py-2.5 text-center text-xs font-semibold text-gray-600 w-10">
+                <span title="Warehouse Stock">WH</span>
+              </th>
+              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 w-10">#</th>
+              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600">Description</th>
+              <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 w-20">Qty</th>
+              <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 w-16">Unit</th>
+              <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 w-16">
+                <span title="Waste Percentage">Waste%</span>
+              </th>
+              <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 w-28">Unit Cost</th>
+              <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 w-28">Extended</th>
+              <th className="px-2 py-2.5 text-center text-xs font-semibold text-gray-600 w-8"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((group, gi) => (
+              <GroupRows key={gi} group={group} groupIndex={gi} onEdit={onEdit} onDelete={onDelete}
+                onToggleStock={onToggleStock} tabKey={tabKey} />
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="bg-gray-100 border-t-2 border-gray-300">
+              <td colSpan={7} className="px-4 py-3 text-sm font-bold text-gray-700 text-right">
+                {pageTotalLabel || 'PAGE TOTAL:'}
+              </td>
+              <td className="px-3 py-3 text-sm font-bold text-gray-900 text-right">{fmt(pageTotal)}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {/* Add item button */}
+      <div className="mt-2 flex justify-start">
+        <button onClick={() => setShowAddModal(true)}
+          className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors">
+          <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Add Line Item
+        </button>
+      </div>
+
+      {/* Add Item Modal */}
+      {showAddModal && (
+        <AddItemModal
+          groups={groups}
+          onAdd={(groupIndex, item) => onAdd(tabKey, groupIndex, item)}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+
+function GroupRows({ group, groupIndex, onEdit, onDelete, onToggleStock, tabKey }) {
   if (!group.items || group.items.length === 0) return null
 
   const handleQtyChange = (itemIndex, value) => {
-    const numValue = parseFloat(value) || 0
-    onEdit(tabKey, groupIndex, itemIndex, 'qty', numValue)
+    onEdit(tabKey, groupIndex, itemIndex, 'qty', parseFloat(value) || 0)
   }
-
   const handleUnitCostChange = (itemIndex, value) => {
-    const numValue = parseFloat(value) || 0
-    onEdit(tabKey, groupIndex, itemIndex, 'unit_cost', numValue)
+    onEdit(tabKey, groupIndex, itemIndex, 'unit_cost', parseFloat(value) || 0)
+  }
+  const handleWasteChange = (itemIndex, value) => {
+    onEdit(tabKey, groupIndex, itemIndex, 'waste_pct', parseFloat(value) || 0)
   }
 
   return (
     <>
       {/* Category header row */}
       <tr className="bg-blue-50 border-t border-gray-200">
-        <td colSpan={6} className="px-4 py-2 text-xs font-bold text-blue-800 uppercase tracking-wider">
+        <td colSpan={9} className="px-4 py-2 text-xs font-bold text-blue-800 uppercase tracking-wider">
           {group.category}
         </td>
       </tr>
       {/* Item rows */}
       {group.items.map((item, idx) => (
-        <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-          <td className="px-4 py-2 text-sm text-gray-500 text-center">{item.line}</td>
-          <td className="px-4 py-2 text-sm text-gray-900">{item.description}</td>
-          <td className="px-4 py-2 text-sm text-gray-700 text-right font-mono">
+        <tr key={idx} className={`border-b border-gray-100 hover:bg-gray-50 ${item.in_stock ? 'bg-green-50/40' : ''}`}>
+          {/* Warehouse stock checkbox */}
+          <td className="px-2 py-1.5 text-center">
+            <input
+              type="checkbox"
+              checked={!!item.in_stock}
+              onChange={() => onToggleStock(tabKey, groupIndex, idx)}
+              className="w-3.5 h-3.5 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer"
+              title={item.in_stock ? 'In warehouse stock' : 'Not in stock'}
+            />
+          </td>
+          <td className="px-3 py-1.5 text-sm text-gray-500 text-center">{item.line || idx + 1}</td>
+          <td className="px-3 py-1.5 text-sm text-gray-900">
+            {item.description}
+            {item.in_stock && (
+              <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700">
+                WH
+              </span>
+            )}
+          </td>
+          <td className="px-3 py-1.5 text-sm text-gray-700 text-right font-mono">
             <input
               type="number"
               value={typeof item.qty === 'number' ? item.qty : 0}
               onChange={(e) => handleQtyChange(idx, e.target.value)}
-              className="w-16 px-2 py-1 text-right font-mono text-sm border border-gray-300 rounded bg-yellow-50 focus:bg-yellow-100 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+              className="w-16 px-1.5 py-1 text-right font-mono text-sm border border-gray-300 rounded bg-yellow-50 focus:bg-yellow-100 focus:outline-none focus:ring-1 focus:ring-yellow-400"
               step="0.01"
             />
           </td>
-          <td className="px-4 py-2 text-sm text-gray-500">{item.unit}</td>
-          <td className="px-4 py-2 text-sm text-gray-700 text-right font-mono">
+          <td className="px-3 py-1.5 text-sm text-gray-500">{item.unit}</td>
+          <td className="px-3 py-1.5 text-sm text-gray-700 text-right font-mono">
+            <input
+              type="number"
+              value={item.waste_pct || 0}
+              onChange={(e) => handleWasteChange(idx, e.target.value)}
+              className="w-14 px-1.5 py-1 text-right font-mono text-sm border border-gray-300 rounded bg-orange-50 focus:bg-orange-100 focus:outline-none focus:ring-1 focus:ring-orange-400"
+              step="1" min="0" max="100"
+            />
+          </td>
+          <td className="px-3 py-1.5 text-sm text-gray-700 text-right font-mono">
             <input
               type="number"
               value={item.unit_cost || 0}
               onChange={(e) => handleUnitCostChange(idx, e.target.value)}
-              className="w-24 px-2 py-1 text-right font-mono text-sm border border-gray-300 rounded bg-yellow-50 focus:bg-yellow-100 focus:outline-none focus:ring-1 focus:ring-yellow-400"
-              step="0.01"
-              min="0"
+              className="w-24 px-1.5 py-1 text-right font-mono text-sm border border-gray-300 rounded bg-yellow-50 focus:bg-yellow-100 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+              step="0.01" min="0"
             />
           </td>
-          <td className="px-4 py-2 text-sm font-medium text-gray-900 text-right font-mono">
+          <td className="px-3 py-1.5 text-sm font-medium text-gray-900 text-right font-mono">
             {fmt(item.extended || 0)}
+          </td>
+          {/* Delete button */}
+          <td className="px-2 py-1.5 text-center">
+            <button
+              onClick={() => onDelete(tabKey, groupIndex, idx)}
+              className="text-gray-300 hover:text-red-500 transition-colors"
+              title="Remove line item"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </td>
         </tr>
       ))}
-      {/* Spacer after group */}
-      <tr><td colSpan={6} className="h-1"></td></tr>
+      <tr><td colSpan={9} className="h-1"></td></tr>
     </>
   )
 }
@@ -107,7 +322,6 @@ function ProjectSummaryTab({ summary }) {
 
   return (
     <div className="space-y-6">
-      {/* Project Info */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h3 className="text-lg font-bold text-gray-900 mb-4 border-b border-gray-200 pb-2">
           PROJECT SUMMARY — ROOFING ESTIMATE
@@ -122,7 +336,6 @@ function ProjectSummaryTab({ summary }) {
         </div>
       </div>
 
-      {/* System Specs */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">Roof System Specifications</h4>
         <div className="grid grid-cols-2 gap-y-2 gap-x-8 text-sm">
@@ -149,7 +362,6 @@ function ProjectSummaryTab({ summary }) {
         </div>
       </div>
 
-      {/* Cost Summary */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">Cost Summary</h4>
         <div className="space-y-2 text-sm">
@@ -173,7 +385,6 @@ function ProjectSummaryTab({ summary }) {
             <span className="text-gray-700">SUBTOTAL:</span>
             <span className="font-mono text-gray-900">{fmt(cs.subtotal)}</span>
           </div>
-
           <div className="flex justify-between py-1">
             <span className="text-gray-600">Profit Markup ({((cs.markup_pct || 0.25) * 100).toFixed(0)}%):</span>
             <span className="font-mono text-gray-900">{fmt(cs.markup)}</span>
@@ -182,7 +393,6 @@ function ProjectSummaryTab({ summary }) {
             <span className="text-gray-700">SUBTOTAL WITH MARKUP:</span>
             <span className="font-mono text-gray-900">{fmt(cs.subtotal_with_markup)}</span>
           </div>
-
           <div className="flex justify-between py-1">
             <span className="text-gray-600">Sales Tax ({((cs.tax_pct || 0.0825) * 100).toFixed(2)}%):</span>
             <span className="font-mono text-gray-900">{fmt(cs.tax)}</span>
@@ -199,6 +409,126 @@ function ProjectSummaryTab({ summary }) {
 
 
 // ============================================================================
+// PRINT MATERIAL LIST
+// ============================================================================
+function printMaterialList(takeoff) {
+  if (!takeoff) return
+
+  const summary = takeoff.summary || {}
+  const allSections = [
+    { title: 'FLAT ROOF MATERIALS', groups: takeoff.flat_materials || [], total: takeoff.flat_materials_total },
+    { title: 'ROOF RELATED METALS', groups: takeoff.metals || [], total: takeoff.metals_total },
+    { title: 'LABOR & GENERAL CONDITIONS', groups: takeoff.labor || [], total: takeoff.labor_total },
+  ]
+
+  // Build aggregate quantities
+  const qtyMap = {}
+  allSections.forEach(s => {
+    s.groups.forEach(g => {
+      (g.items || []).forEach(item => {
+        if (!item.qty || item.qty <= 0) return
+        const key = `${item.description}||${item.unit}`
+        if (!qtyMap[key]) qtyMap[key] = { description: item.description, unit: item.unit, totalQty: 0, inStock: false }
+        qtyMap[key].totalQty += item.qty
+        if (item.in_stock) qtyMap[key].inStock = true
+      })
+    })
+  })
+  const aggregated = Object.values(qtyMap).sort((a, b) => a.description.localeCompare(b.description))
+
+  let html = `<!DOCTYPE html><html><head><title>Material List - ${summary.project_name || 'Project'}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; padding: 20px; }
+  h1 { font-size: 16px; text-align: center; margin-bottom: 2px; }
+  .subtitle { text-align: center; font-size: 11px; color: #666; margin-bottom: 16px; }
+  h2 { font-size: 13px; background: #e8edf3; padding: 5px 8px; margin: 12px 0 4px; border-left: 3px solid #2563eb; }
+  h3 { font-size: 11px; color: #2563eb; padding: 3px 8px; background: #f0f5ff; margin-top: 6px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+  th { text-align: left; font-size: 9px; color: #666; text-transform: uppercase; padding: 3px 6px; border-bottom: 1px solid #ccc; }
+  th.r { text-align: right; }
+  td { padding: 3px 6px; border-bottom: 1px solid #eee; font-size: 11px; }
+  td.r { text-align: right; font-family: 'Courier New', monospace; }
+  td.c { text-align: center; }
+  tr.stock td { background: #f0fdf4; }
+  .stock-badge { display: inline-block; background: #dcfce7; color: #166534; font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; }
+  .total-row td { font-weight: bold; border-top: 2px solid #333; padding-top: 6px; }
+  .section-total td { font-weight: bold; border-top: 1px solid #999; background: #f5f5f5; }
+  .grand-total td { font-size: 13px; font-weight: bold; border-top: 3px double #333; padding: 8px 6px; }
+  .qty-summary { margin-top: 20px; page-break-before: always; }
+  .qty-summary h2 { background: #f3e8ff; border-left-color: #7c3aed; }
+  @media print {
+    body { padding: 10px; }
+    .no-print { display: none !important; }
+    @page { margin: 0.5in; size: letter; }
+  }
+</style></head><body>`
+
+  html += `<h1>MATERIAL LIST</h1>`
+  html += `<div class="subtitle">${summary.project_name || ''} — ${summary.address || ''} — ${new Date().toLocaleDateString()}</div>`
+
+  // Print button
+  html += `<div class="no-print" style="text-align:center;margin-bottom:16px">
+    <button onclick="window.print()" style="padding:8px 24px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer">Print / Save PDF</button>
+    <button onclick="window.close()" style="padding:8px 16px;margin-left:8px;background:#eee;border:1px solid #ccc;border-radius:6px;font-size:13px;cursor:pointer">Close</button>
+  </div>`
+
+  // Detail sections
+  allSections.forEach(section => {
+    if (section.groups.length === 0) return
+    html += `<h2>${section.title}</h2>`
+
+    section.groups.forEach(group => {
+      if (!group.items || group.items.length === 0) return
+      html += `<h3>${group.category}</h3>`
+      html += `<table><thead><tr><th style="width:30px">#</th><th>Description</th><th class="r" style="width:60px">Qty</th><th style="width:40px">Unit</th><th class="r" style="width:50px">Waste%</th><th class="r" style="width:80px">Unit Cost</th><th class="r" style="width:80px">Extended</th><th style="width:30px">WH</th></tr></thead><tbody>`
+
+      group.items.forEach((item, i) => {
+        const cls = item.in_stock ? ' class="stock"' : ''
+        html += `<tr${cls}>
+          <td class="c">${item.line || i + 1}</td>
+          <td>${item.description}</td>
+          <td class="r">${fmtNum(item.qty)}</td>
+          <td>${item.unit}</td>
+          <td class="r">${item.waste_pct ? item.waste_pct + '%' : '—'}</td>
+          <td class="r">${fmt(item.unit_cost)}</td>
+          <td class="r">${fmt(item.extended)}</td>
+          <td class="c">${item.in_stock ? '<span class="stock-badge">WH</span>' : ''}</td>
+        </tr>`
+      })
+      html += `</tbody></table>`
+    })
+
+    html += `<table><tbody><tr class="section-total"><td colspan="6" style="text-align:right">${section.title} TOTAL:</td><td class="r">${fmt(section.total)}</td><td></td></tr></tbody></table>`
+  })
+
+  // Grand total
+  const cs = summary.cost_summary || {}
+  html += `<table style="margin-top:12px"><tbody>
+    <tr><td colspan="6" style="text-align:right">Subtotal:</td><td class="r">${fmt(cs.subtotal)}</td><td></td></tr>
+    <tr><td colspan="6" style="text-align:right">Markup (${((cs.markup_pct || 0.25) * 100).toFixed(0)}%):</td><td class="r">${fmt(cs.markup)}</td><td></td></tr>
+    <tr><td colspan="6" style="text-align:right">Tax (${((cs.tax_pct || 0.0825) * 100).toFixed(2)}%):</td><td class="r">${fmt(cs.tax)}</td><td></td></tr>
+    <tr class="grand-total"><td colspan="6" style="text-align:right">GRAND TOTAL:</td><td class="r">${fmt(cs.grand_total)}</td><td></td></tr>
+  </tbody></table>`
+
+  // Quantity summary page
+  html += `<div class="qty-summary"><h2>TOTAL ESTIMATED QUANTITIES</h2>
+    <table><thead><tr><th>Material / Item</th><th class="r" style="width:80px">Total Qty</th><th style="width:40px">Unit</th><th style="width:30px">WH</th></tr></thead><tbody>`
+  aggregated.forEach(item => {
+    const cls = item.inStock ? ' class="stock"' : ''
+    html += `<tr${cls}><td>${item.description}</td><td class="r">${fmtNum(Math.ceil(item.totalQty))}</td><td>${item.unit}</td><td class="c">${item.inStock ? '<span class="stock-badge">WH</span>' : ''}</td></tr>`
+  })
+  html += `</tbody></table></div>`
+
+  html += `</body></html>`
+
+  const printWindow = window.open('', '_blank')
+  printWindow.document.write(html)
+  printWindow.document.close()
+}
+
+
+// ============================================================================
 // MAIN ESTIMATE TAB
 // ============================================================================
 export default function EstimateTab({ projectId }) {
@@ -208,16 +538,19 @@ export default function EstimateTab({ projectId }) {
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('summary')
   const [saving, setSaving] = useState(false)
-  const [saveStatus, setSaveStatus] = useState(null) // 'saved', 'saving', 'error', 'unsaved'
+  const [saveStatus, setSaveStatus] = useState(null)
   const [savedVersion, setSavedVersion] = useState(null)
   const [lastSavedAt, setLastSavedAt] = useState(null)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const saveTimerRef = useRef(null)
 
+  // Add item modal state per tab
+  const [showAddMaterials, setShowAddMaterials] = useState(false)
+  const [showAddMetals, setShowAddMetals] = useState(false)
+  const [showAddLabor, setShowAddLabor] = useState(false)
+
   // ---- Load saved estimate on mount ----
-  useEffect(() => {
-    loadSavedEstimate()
-  }, [projectId])
+  useEffect(() => { loadSavedEstimate() }, [projectId])
 
   const loadSavedEstimate = async () => {
     try {
@@ -228,124 +561,134 @@ export default function EstimateTab({ projectId }) {
         setLastSavedAt(res.data.updated_at)
         setSaveStatus('saved')
       }
-    } catch (err) {
-      // No saved estimate — that's fine
-    } finally {
-      setLoadingInitial(false)
-    }
+    } catch (err) { /* no saved estimate */ }
+    finally { setLoadingInitial(false) }
   }
 
-  // ---- Save estimate to backend ----
+  // ---- Save ----
   const saveEstimate = useCallback(async (data) => {
     if (!data) return
-    setSaving(true)
-    setSaveStatus('saving')
+    setSaving(true); setSaveStatus('saving')
     try {
       const res = await estimateAPI.save(projectId, data)
       setSavedVersion(res.data.version)
       setLastSavedAt(new Date().toISOString())
-      setSaveStatus('saved')
-      setHasUnsavedChanges(false)
-    } catch (err) {
-      setSaveStatus('error')
-      console.error('Failed to save estimate:', err)
-    } finally {
-      setSaving(false)
-    }
+      setSaveStatus('saved'); setHasUnsavedChanges(false)
+    } catch (err) { setSaveStatus('error') }
+    finally { setSaving(false) }
   }, [projectId])
 
-  // ---- Auto-save on changes (debounced) ----
   const debouncedSave = useCallback((data) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    setHasUnsavedChanges(true)
-    setSaveStatus('unsaved')
-    saveTimerRef.current = setTimeout(() => {
-      saveEstimate(data)
-    }, 2000) // 2 second debounce
+    setHasUnsavedChanges(true); setSaveStatus('unsaved')
+    saveTimerRef.current = setTimeout(() => saveEstimate(data), 2000)
   }, [saveEstimate])
 
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+  useEffect(() => { return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) } }, [])
+
+  // ---- Recalculate helper ----
+  const recalcTotals = (updated) => {
+    const flatTotal = updated.flat_materials?.reduce((sum, g) => sum + (g.items || []).reduce((s, it) => s + (it.extended || 0), 0), 0) || 0
+    const metalsTotal = updated.metals?.reduce((sum, g) => sum + (g.items || []).reduce((s, it) => s + (it.extended || 0), 0), 0) || 0
+    const laborTotal = updated.labor?.reduce((sum, g) => sum + (g.items || []).reduce((s, it) => s + (it.extended || 0), 0), 0) || 0
+
+    updated.flat_materials_total = flatTotal
+    updated.metals_total = metalsTotal
+    updated.labor_total = laborTotal
+
+    // Recalc group totals too
+    ;['flat_materials', 'metals', 'labor'].forEach(key => {
+      (updated[key] || []).forEach(g => {
+        g.total = (g.items || []).reduce((s, it) => s + (it.extended || 0), 0)
+      })
+    })
+
+    const subtotal = flatTotal + metalsTotal + laborTotal + (updated.warranty_cost || 0)
+    const markupPct = updated.summary?.cost_summary?.markup_pct || 0.25
+    const markup = subtotal * markupPct
+    const subtotalWithMarkup = subtotal + markup
+    const taxPct = updated.summary?.cost_summary?.tax_pct || 0.0825
+    const tax = subtotalWithMarkup * taxPct
+    const grandTotal = subtotalWithMarkup + tax
+
+    if (updated.summary?.cost_summary) {
+      updated.summary.cost_summary.flat_materials = flatTotal
+      updated.summary.cost_summary.metals = metalsTotal
+      updated.summary.cost_summary.labor = laborTotal
+      updated.summary.cost_summary.subtotal = subtotal
+      updated.summary.cost_summary.markup = markup
+      updated.summary.cost_summary.subtotal_with_markup = subtotalWithMarkup
+      updated.summary.cost_summary.tax = tax
+      updated.summary.cost_summary.grand_total = grandTotal
     }
-  }, [])
+    return updated
+  }
 
   // ---- Generate takeoff ----
   const fetchTakeoff = async () => {
-    setLoading(true)
-    setError('')
+    setLoading(true); setError('')
     try {
       const res = await estimateAPI.takeoff(projectId)
       setTakeoff(res.data)
-      // Auto-save immediately after generating
       await saveEstimate(res.data)
     } catch (err) {
       const detail = err.response?.data?.detail
-      if (typeof detail === 'string') {
-        setError(detail)
-      } else {
-        setError('Failed to generate takeoff. Make sure you have conditions (run Smart Build first).')
-      }
-    } finally {
-      setLoading(false)
-    }
+      setError(typeof detail === 'string' ? detail : 'Failed to generate takeoff. Make sure you have conditions (run Smart Build first).')
+    } finally { setLoading(false) }
   }
 
-  // Handle editing items in takeoff tables
+  // ---- Edit item ----
   const handleItemEdit = (tabKey, groupIndex, itemIndex, field, value) => {
-    setTakeoff(prevTakeoff => {
-      const updated = JSON.parse(JSON.stringify(prevTakeoff)) // Deep clone
-      const groups = updated[tabKey] || []
-
-      if (!groups[groupIndex] || !groups[groupIndex].items) return prevTakeoff
-
-      const item = groups[groupIndex].items[itemIndex]
-      if (!item) return prevTakeoff
-
-      // Update the field
+    setTakeoff(prev => {
+      const updated = JSON.parse(JSON.stringify(prev))
+      const item = updated[tabKey]?.[groupIndex]?.items?.[itemIndex]
+      if (!item) return prev
       item[field] = value
-
-      // Recalculate extended cost
-      item.extended = (item.qty || 0) * (item.unit_cost || 0)
-
-      // Recalculate group total
-      if (groups[groupIndex].items) {
-        groups[groupIndex].total = groups[groupIndex].items.reduce((sum, it) => sum + (it.extended || 0), 0)
-      }
-
-      // Recalculate page totals
-      const flatTotal = updated.flat_materials?.reduce((sum, group) => sum + (group.total || 0), 0) || 0
-      const metalsTotal = updated.metals?.reduce((sum, group) => sum + (group.total || 0), 0) || 0
-      const laborTotal = updated.labor?.reduce((sum, group) => sum + (group.total || 0), 0) || 0
-
-      updated.flat_materials_total = flatTotal
-      updated.metals_total = metalsTotal
-      updated.labor_total = laborTotal
-
-      // Recalculate cost summary
-      const subtotal = flatTotal + metalsTotal + laborTotal + (updated.warranty_cost || 0)
-      const markupPct = updated.summary?.cost_summary?.markup_pct || 0.25
-      const markup = subtotal * markupPct
-      const subtotalWithMarkup = subtotal + markup
-      const taxPct = updated.summary?.cost_summary?.tax_pct || 0.0825
-      const tax = subtotalWithMarkup * taxPct
-      const grandTotal = subtotalWithMarkup + tax
-
-      if (updated.summary && updated.summary.cost_summary) {
-        updated.summary.cost_summary.flat_materials = flatTotal
-        updated.summary.cost_summary.metals = metalsTotal
-        updated.summary.cost_summary.labor = laborTotal
-        updated.summary.cost_summary.subtotal = subtotal
-        updated.summary.cost_summary.markup = markup
-        updated.summary.cost_summary.subtotal_with_markup = subtotalWithMarkup
-        updated.summary.cost_summary.tax = tax
-        updated.summary.cost_summary.grand_total = grandTotal
-      }
-
-      // Trigger debounced auto-save
+      item.extended = (item.qty || 0) * (1 + (item.waste_pct || 0) / 100) * (item.unit_cost || 0)
+      recalcTotals(updated)
       debouncedSave(updated)
+      return updated
+    })
+  }
 
+  // ---- Delete item ----
+  const handleDeleteItem = (tabKey, groupIndex, itemIndex) => {
+    setTakeoff(prev => {
+      const updated = JSON.parse(JSON.stringify(prev))
+      const group = updated[tabKey]?.[groupIndex]
+      if (!group?.items) return prev
+      group.items.splice(itemIndex, 1)
+      // Renumber remaining
+      group.items.forEach((it, i) => { it.line = i + 1 })
+      recalcTotals(updated)
+      debouncedSave(updated)
+      return updated
+    })
+  }
+
+  // ---- Add item ----
+  const handleAddItem = (tabKey, groupIndex, newItem) => {
+    setTakeoff(prev => {
+      const updated = JSON.parse(JSON.stringify(prev))
+      const group = updated[tabKey]?.[groupIndex]
+      if (!group) return prev
+      if (!group.items) group.items = []
+      newItem.line = group.items.length + 1
+      group.items.push(newItem)
+      recalcTotals(updated)
+      debouncedSave(updated)
+      return updated
+    })
+  }
+
+  // ---- Toggle warehouse stock ----
+  const handleToggleStock = (tabKey, groupIndex, itemIndex) => {
+    setTakeoff(prev => {
+      const updated = JSON.parse(JSON.stringify(prev))
+      const item = updated[tabKey]?.[groupIndex]?.items?.[itemIndex]
+      if (!item) return prev
+      item.in_stock = !item.in_stock
+      debouncedSave(updated)
       return updated
     })
   }
@@ -355,14 +698,11 @@ export default function EstimateTab({ projectId }) {
     { id: 'materials', label: 'Flat Roof Materials' },
     { id: 'metals', label: 'Roof Related Metals' },
     { id: 'labor', label: 'Labor & General Conditions' },
+    { id: 'quantities', label: 'Total Quantities' },
   ]
 
   if (loadingInitial) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <LoadingSpinner />
-      </div>
-    )
+    return <div className="flex items-center justify-center py-16"><LoadingSpinner /></div>
   }
 
   return (
@@ -371,7 +711,6 @@ export default function EstimateTab({ projectId }) {
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold text-gray-900">Material Takeoff & Estimate</h2>
-          {/* Save status indicator */}
           {takeoff && (
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
               saveStatus === 'saved' ? 'bg-green-50 text-green-700' :
@@ -381,74 +720,45 @@ export default function EstimateTab({ projectId }) {
               'bg-gray-50 text-gray-500'
             }`}>
               {saveStatus === 'saved' && (
-                <>
-                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                  Saved{savedVersion ? ` (v${savedVersion})` : ''}
-                </>
+                <><svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>Saved{savedVersion ? ` (v${savedVersion})` : ''}</>
               )}
               {saveStatus === 'saving' && (
-                <>
-                  <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Saving...
-                </>
+                <><svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Saving...</>
               )}
-              {saveStatus === 'unsaved' && (
-                <>
-                  <div className="w-2 h-2 rounded-full bg-yellow-500" />
-                  Unsaved changes
-                </>
-              )}
-              {saveStatus === 'error' && (
-                <>
-                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                  Save failed
-                </>
-              )}
+              {saveStatus === 'unsaved' && (<><div className="w-2 h-2 rounded-full bg-yellow-500" />Unsaved changes</>)}
+              {saveStatus === 'error' && (<><svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>Save failed</>)}
             </span>
           )}
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Manual save button */}
+          {/* Print material list */}
+          {takeoff && (
+            <button onClick={() => printMaterialList(takeoff)}
+              className="inline-flex items-center px-3 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
+              <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Print Material List
+            </button>
+          )}
+          {/* Save Now */}
           {takeoff && hasUnsavedChanges && (
-            <button
-              onClick={() => saveEstimate(takeoff)}
-              disabled={saving}
-              className="inline-flex items-center px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
-            >
+            <button onClick={() => saveEstimate(takeoff)} disabled={saving}
+              className="inline-flex items-center px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors">
               <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
               </svg>
               {saving ? 'Saving...' : 'Save Now'}
             </button>
           )}
-          <button
-            onClick={fetchTakeoff}
-            disabled={loading}
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
+          {/* Generate */}
+          <button onClick={fetchTakeoff} disabled={loading}
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
             {loading ? (
-              <>
-                <svg className="animate-spin w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Generating...
-              </>
+              <><svg className="animate-spin w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>Generating...</>
             ) : (
-              <>
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                </svg>
-                {takeoff ? 'Regenerate Takeoff' : 'Generate Takeoff'}
-              </>
+              <><svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>{takeoff ? 'Regenerate Takeoff' : 'Generate Takeoff'}</>
             )}
           </button>
         </div>
@@ -480,7 +790,7 @@ export default function EstimateTab({ projectId }) {
             <div className="flex gap-6 text-right">
               <div>
                 <p className="text-xs text-blue-200">Materials</p>
-                <p className="text-sm font-semibold">{fmt(takeoff.flat_materials_total + takeoff.metals_total)}</p>
+                <p className="text-sm font-semibold">{fmt((takeoff.flat_materials_total || 0) + (takeoff.metals_total || 0))}</p>
               </div>
               <div>
                 <p className="text-xs text-blue-200">Labor</p>
@@ -501,26 +811,20 @@ export default function EstimateTab({ projectId }) {
           <div className="border-b border-gray-200 mb-4">
             <nav className="-mb-px flex space-x-1">
               {tabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                   className={`px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors ${
                     activeTab === tab.id
                       ? 'bg-white border border-b-0 border-gray-200 text-blue-700 -mb-px'
                       : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                   }`}
-                >
-                  {tab.label}
-                </button>
+                >{tab.label}</button>
               ))}
             </nav>
           </div>
 
           {/* Tab Content */}
           <div>
-            {activeTab === 'summary' && (
-              <ProjectSummaryTab summary={takeoff.summary} />
-            )}
+            {activeTab === 'summary' && <ProjectSummaryTab summary={takeoff.summary} />}
 
             {activeTab === 'materials' && (
               <div>
@@ -529,8 +833,9 @@ export default function EstimateTab({ projectId }) {
                   groups={takeoff.flat_materials || []}
                   pageTotal={takeoff.flat_materials_total}
                   pageTotalLabel="PAGE 2 TOTAL:"
-                  onEdit={handleItemEdit}
-                  tabKey="flat_materials"
+                  onEdit={handleItemEdit} onDelete={handleDeleteItem} onAdd={handleAddItem}
+                  onToggleStock={handleToggleStock} tabKey="flat_materials"
+                  showAddModal={showAddMaterials} setShowAddModal={setShowAddMaterials}
                 />
               </div>
             )}
@@ -542,8 +847,9 @@ export default function EstimateTab({ projectId }) {
                   groups={takeoff.metals || []}
                   pageTotal={takeoff.metals_total}
                   pageTotalLabel="PAGE 3 TOTAL:"
-                  onEdit={handleItemEdit}
-                  tabKey="metals"
+                  onEdit={handleItemEdit} onDelete={handleDeleteItem} onAdd={handleAddItem}
+                  onToggleStock={handleToggleStock} tabKey="metals"
+                  showAddModal={showAddMetals} setShowAddModal={setShowAddMetals}
                 />
               </div>
             )}
@@ -555,16 +861,27 @@ export default function EstimateTab({ projectId }) {
                   groups={takeoff.labor || []}
                   pageTotal={takeoff.labor_total}
                   pageTotalLabel="PAGE 4 TOTAL:"
-                  onEdit={handleItemEdit}
-                  tabKey="labor"
+                  onEdit={handleItemEdit} onDelete={handleDeleteItem} onAdd={handleAddItem}
+                  onToggleStock={handleToggleStock} tabKey="labor"
+                  showAddModal={showAddLabor} setShowAddModal={setShowAddLabor}
                 />
-                {/* Warranty line */}
                 {takeoff.warranty_cost > 0 && (
                   <div className="mt-3 bg-white rounded-lg border border-gray-200 px-4 py-3 flex justify-between items-center">
                     <span className="text-sm font-medium text-gray-700">{takeoff.warranty_description}</span>
                     <span className="text-sm font-bold text-gray-900 font-mono">{fmt(takeoff.warranty_cost)}</span>
                   </div>
                 )}
+              </div>
+            )}
+
+            {activeTab === 'quantities' && (
+              <div>
+                <h3 className="text-base font-bold text-gray-800 mb-3 uppercase">Total Estimated Quantities</h3>
+                <p className="text-sm text-gray-500 mb-3">
+                  Aggregated quantities across all material pages. Use this to decide if similar items can be consolidated
+                  (e.g., use only 6" screws and delete the 2" line).
+                </p>
+                <QuantitySummary takeoff={takeoff} />
               </div>
             )}
           </div>
