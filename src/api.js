@@ -114,6 +114,26 @@ export const adminAPI = {
   deleteLogo: () => api.delete('/api/v1/admin/company/logo'),
 }
 
+// ============= CUSTOMERS =============
+export const customerAPI = {
+  list: (search) => api.get('/api/v1/customers', { params: search ? { search } : {} }),
+  get: (id) => api.get(`/api/v1/customers/${id}`),
+  create: (data) => api.post('/api/v1/customers', data),
+  update: (id, data) => api.put(`/api/v1/customers/${id}`, data),
+  delete: (id) => api.delete(`/api/v1/customers/${id}`),
+}
+
+// ============= SAVED PROPOSALS =============
+export const savedProposalAPI = {
+  list: (projectId) => api.get(`/api/v1/projects/${projectId}/proposals`),
+  get: (id) => api.get(`/api/v1/proposals/${id}`),
+  save: (projectId, data) => api.post(`/api/v1/projects/${projectId}/proposals`, data),
+  update: (id, data) => api.put(`/api/v1/proposals/${id}`, data),
+  delete: (id) => api.delete(`/api/v1/proposals/${id}`),
+  generatePdf: (id) => api.get(`/api/v1/proposals/${id}/generate-pdf`, { responseType: 'blob' }),
+  batchGenerate: (projectId, data) => api.post(`/api/v1/projects/${projectId}/generate-batch-proposals`, data),
+}
+
 // ============= REFERENCE DATA =============
 export const referenceAPI = {
   conditionTypes: () => api.get('/api/v1/reference/condition-types'),

@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react'
-import { proposalAPI, estimateAPI } from '../api'
+import { useState, useEffect, useCallback } from 'react'
+import { proposalAPI, estimateAPI, customerAPI, savedProposalAPI } from '../api'
 import { LoadingSpinner } from './common'
+import Modal from './Modal'
 
 const defaultLineItem = { item: '', description: '', qty: '', unit: 'SF', unit_price: '', total: '' }
 
 function LineItemRow({ item, index, onChange, onRemove }) {
   const handleField = (field, value) => {
     const updated = { ...item, [field]: value }
-    // Auto-calculate total
     if (field === 'qty' || field === 'unit_price') {
       const q = parseFloat(updated.qty) || 0
       const p = parseFloat(updated.unit_price) || 0
@@ -107,11 +107,329 @@ function LineItemTable({ title, items, setItems }) {
   )
 }
 
+// ============================================================================
+// CUSTOMER SELECTOR WITH INLINE ADD
+// ============================================================================
+function CustomerSelector({ selectedId, onSelect, customers, onRefreshCustomers }) {
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [newCustomer, setNewCustomer] = useState({
+    company_name: '', contact_name: '', contact_email: '', contact_phone: ''
+  })
+  const [saving, setSaving] = useState(false)
+
+  const handleAddCustomer = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      const res = await customerAPI.create(newCustomer)
+      onRefreshCustomers()
+      onSelect(res.data.id)
+      setShowAddForm(false)
+      setNewCustomer({ company_name: '', contact_name: '', contact_email: '', contact_phone: '' })
+    } catch (err) {
+      alert('Failed to create customer')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex gap-2 items-end">
+        <div className="flex-1">
+          <label className="block text-xs font-medium text-gray-600 mb-1">Select Customer</label>
+          <select
+            value={selectedId || ''}
+            onChange={e => onSelect(e.target.value ? parseInt(e.target.value) : null)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-primary-500 focus:border-primary-500"
+          >
+            <option value="">-- Select a customer or enter manually --</option>
+            {customers.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.company_name}{c.contact_name ? ` (${c.contact_name})` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowAddForm(!showAddForm)}
+          className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-lg bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
+        >
+          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          New Customer
+        </button>
+      </div>
+
+      {showAddForm && (
+        <form onSubmit={handleAddCustomer} className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <input required placeholder="Company name *" value={newCustomer.company_name}
+              onChange={e => setNewCustomer({ ...newCustomer, company_name: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm" />
+            <input placeholder="Contact name" value={newCustomer.contact_name}
+              onChange={e => setNewCustomer({ ...newCustomer, contact_name: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm" />
+            <input type="email" placeholder="Email" value={newCustomer.contact_email}
+              onChange={e => setNewCustomer({ ...newCustomer, contact_email: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm" />
+            <input type="tel" placeholder="Phone" value={newCustomer.contact_phone}
+              onChange={e => setNewCustomer({ ...newCustomer, contact_phone: e.target.value })}
+              className="border border-gray-300 rounded px-2 py-1.5 text-sm" />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button type="button" onClick={() => setShowAddForm(false)}
+              className="px-3 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+            <button type="submit" disabled={saving}
+              className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50">
+              {saving ? 'Saving...' : 'Add Customer'}
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
+}
+
+// ============================================================================
+// BATCH PROPOSAL MODAL
+// ============================================================================
+function BatchProposalModal({ isOpen, onClose, customers, projectId, proposalData, calcSectionTotal, roofingItems, metalRoofItems, wallPanelItems, awningItems }) {
+  const [selectedIds, setSelectedIds] = useState([])
+  const [generating, setGenerating] = useState(false)
+  const [results, setResults] = useState(null)
+
+  const toggleCustomer = (id) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    )
+  }
+
+  const handleGenerate = async () => {
+    if (selectedIds.length === 0) return
+    setGenerating(true)
+    setResults(null)
+    try {
+      const res = await savedProposalAPI.batchGenerate(projectId, {
+        customer_ids: selectedIds,
+        proposal_data: proposalData,
+      })
+      setResults(res.data.proposals)
+    } catch (err) {
+      alert('Batch generation failed')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const downloadPdf = async (proposalId, customerName) => {
+    try {
+      const res = await savedProposalAPI.generatePdf(proposalId)
+      const blob = new Blob([res.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `Proposal_${customerName.replace(/\s+/g, '_')}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      alert('Failed to download PDF')
+    }
+  }
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Generate for Multiple Customers">
+      <div className="space-y-4">
+        {!results ? (
+          <>
+            <p className="text-sm text-gray-600">
+              Select the customers you'd like to send this proposal to. A separate proposal will be created for each.
+            </p>
+            <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+              {customers.map(c => (
+                <label key={c.id} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(c.id)}
+                    onChange={() => toggleCustomer(c.id)}
+                    className="rounded border-gray-300 text-primary-600 mr-3"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-900">{c.company_name}</span>
+                    {c.contact_name && (
+                      <span className="text-xs text-gray-500 ml-2">{c.contact_name}</span>
+                    )}
+                  </div>
+                </label>
+              ))}
+              {customers.length === 0 && (
+                <p className="text-sm text-gray-500 p-3">No customers in database yet. Add customers first.</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={onClose} className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">
+                Cancel
+              </button>
+              <button
+                onClick={handleGenerate}
+                disabled={generating || selectedIds.length === 0}
+                className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+              >
+                {generating ? 'Creating...' : `Create ${selectedIds.length} Proposal${selectedIds.length !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-green-700 font-medium">
+              {results.filter(r => !r.error).length} proposal(s) created successfully.
+            </p>
+            <div className="space-y-2">
+              {results.map((r, i) => (
+                <div key={i} className={`flex items-center justify-between p-3 rounded-lg ${r.error ? 'bg-red-50' : 'bg-green-50'}`}>
+                  <div>
+                    <span className="text-sm font-medium">{r.customer_company || `Customer #${r.customer_id}`}</span>
+                    {r.error && <span className="text-xs text-red-600 ml-2">{r.error}</span>}
+                  </div>
+                  {!r.error && (
+                    <button
+                      onClick={() => downloadPdf(r.proposal_id, r.customer_company)}
+                      className="text-xs bg-white border border-green-300 text-green-700 px-3 py-1 rounded hover:bg-green-100"
+                    >
+                      Download PDF
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end">
+              <button onClick={onClose} className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700">
+                Done
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+// ============================================================================
+// SAVED PROPOSALS LIST
+// ============================================================================
+function SavedProposalsList({ projectId, onLoad }) {
+  const [proposals, setProposals] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchProposals = useCallback(async () => {
+    try {
+      const res = await savedProposalAPI.list(projectId)
+      setProposals(res.data || [])
+    } catch (err) {
+      // No saved proposals yet
+    } finally {
+      setLoading(false)
+    }
+  }, [projectId])
+
+  useEffect(() => { fetchProposals() }, [fetchProposals])
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this saved proposal?')) return
+    try {
+      await savedProposalAPI.delete(id)
+      fetchProposals()
+    } catch (err) {
+      alert('Failed to delete')
+    }
+  }
+
+  const handleDownload = async (id, name) => {
+    try {
+      const res = await savedProposalAPI.generatePdf(id)
+      const blob = new Blob([res.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${name || 'Proposal'}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      alert('Failed to generate PDF')
+    }
+  }
+
+  if (loading) return null
+  if (proposals.length === 0) return null
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-200">
+        <h3 className="text-sm font-semibold text-gray-900">Saved Proposals</h3>
+      </div>
+      <div className="divide-y divide-gray-100">
+        {proposals.map(p => (
+          <div key={p.id} className="px-4 py-3 flex items-center justify-between hover:bg-gray-50">
+            <div>
+              <span className="text-sm font-medium text-gray-900">{p.proposal_name}</span>
+              {p.customer_company && (
+                <span className="text-xs text-gray-500 ml-2">({p.customer_company})</span>
+              )}
+              <div className="flex gap-2 mt-0.5">
+                <span className={`text-xs px-1.5 py-0.5 rounded ${
+                  p.status === 'sent' ? 'bg-blue-100 text-blue-700' :
+                  p.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                  p.status === 'declined' ? 'bg-red-100 text-red-700' :
+                  'bg-gray-100 text-gray-600'
+                }`}>
+                  {p.status}
+                </span>
+                <span className="text-xs text-gray-400">
+                  {new Date(p.updated_at).toLocaleDateString()}
+                </span>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => onLoad(p.id)}
+                className="text-xs text-primary-600 hover:text-primary-800 font-medium">
+                Edit
+              </button>
+              <button onClick={() => handleDownload(p.id, p.proposal_name)}
+                className="text-xs text-green-600 hover:text-green-800 font-medium">
+                PDF
+              </button>
+              <button onClick={() => handleDelete(p.id)}
+                className="text-xs text-red-500 hover:text-red-700">
+                Delete
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
+// MAIN PROPOSAL TAB
+// ============================================================================
 export default function ProposalTab({ projectId, project }) {
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [currentProposalId, setCurrentProposalId] = useState(null)
+
+  // Customers
+  const [customers, setCustomers] = useState([])
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null)
 
   // Page toggles
   const [includeMetalRoof, setIncludeMetalRoof] = useState(false)
@@ -135,10 +453,40 @@ export default function ProposalTab({ projectId, project }) {
   const [wallPanelItems, setWallPanelItems] = useState([])
   const [awningItems, setAwningItems] = useState([])
 
-  // Load defaults from estimate data
+  // Batch modal
+  const [showBatchModal, setShowBatchModal] = useState(false)
+
+  // Saved proposals refresh key
+  const [savedKey, setSavedKey] = useState(0)
+
+  const fetchCustomers = useCallback(async () => {
+    try {
+      const res = await customerAPI.list()
+      setCustomers(res.data || [])
+    } catch (err) {
+      // Customers endpoint may not exist yet
+    }
+  }, [])
+
   useEffect(() => {
+    fetchCustomers()
     loadDefaults()
   }, [projectId])
+
+  // When a customer is selected, auto-fill the "Prepared For" fields
+  useEffect(() => {
+    if (selectedCustomerId) {
+      const customer = customers.find(c => c.id === selectedCustomerId)
+      if (customer) {
+        setPreparedFor({
+          company: customer.company_name || '',
+          contact_name: customer.contact_name || '',
+          contact_email: customer.contact_email || '',
+          contact_phone: customer.contact_phone || '',
+        })
+      }
+    }
+  }, [selectedCustomerId, customers])
 
   const loadDefaults = async () => {
     setLoading(true)
@@ -149,7 +497,7 @@ export default function ProposalTab({ projectId, project }) {
       if (d.roofing_system_description) setRoofingDescription(d.roofing_system_description)
       if (d.roofing_items?.length) setRoofingItems(d.roofing_items)
     } catch (err) {
-      // No defaults yet, that's fine
+      // No defaults yet
     } finally {
       setLoading(false)
     }
@@ -163,50 +511,54 @@ export default function ProposalTab({ projectId, project }) {
     return sum > 0 ? `$${sum.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : ''
   }
 
+  const buildPayload = () => {
+    const payload = {
+      prepared_for: preparedFor,
+      roofing_system_description: roofingDescription,
+      roofing_items: roofingItems.filter(i => i.description),
+      roofing_total: calcSectionTotal(roofingItems),
+      include_metal_roof: includeMetalRoof,
+      include_wall_panels: includeWallPanels,
+      include_awnings: includeAwnings,
+    }
+
+    if (includeMetalRoof) {
+      payload.metal_roof_description = metalRoofDescription
+      payload.metal_roof_items = metalRoofItems.filter(i => i.description)
+      payload.metal_roof_total = calcSectionTotal(metalRoofItems)
+    }
+    if (includeWallPanels) {
+      payload.wall_panel_description = wallPanelDescription
+      payload.wall_panel_items = wallPanelItems.filter(i => i.description)
+      payload.wall_panel_total = calcSectionTotal(wallPanelItems)
+    }
+    if (includeAwnings) {
+      payload.awning_description = awningDescription
+      payload.awning_items = awningItems.filter(i => i.description)
+      payload.awning_total = calcSectionTotal(awningItems)
+    }
+
+    // Grand total
+    const allTotals = [roofingItems, metalRoofItems, wallPanelItems, awningItems]
+    const grandSum = allTotals.flat().reduce((s, it) => {
+      const t = parseFloat(String(it.total).replace(/[$,]/g, '')) || 0
+      return s + t
+    }, 0)
+    if (grandSum > 0) {
+      payload.grand_total = `$${grandSum.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
+    }
+
+    return payload
+  }
+
   const handleGenerate = async () => {
     setGenerating(true)
     setError('')
     setSuccess('')
     try {
-      const payload = {
-        prepared_for: preparedFor,
-        roofing_system_description: roofingDescription,
-        roofing_items: roofingItems.filter(i => i.description),
-        roofing_total: calcSectionTotal(roofingItems),
-        include_metal_roof: includeMetalRoof,
-        include_wall_panels: includeWallPanels,
-        include_awnings: includeAwnings,
-      }
-
-      if (includeMetalRoof) {
-        payload.metal_roof_description = metalRoofDescription
-        payload.metal_roof_items = metalRoofItems.filter(i => i.description)
-        payload.metal_roof_total = calcSectionTotal(metalRoofItems)
-      }
-      if (includeWallPanels) {
-        payload.wall_panel_description = wallPanelDescription
-        payload.wall_panel_items = wallPanelItems.filter(i => i.description)
-        payload.wall_panel_total = calcSectionTotal(wallPanelItems)
-      }
-      if (includeAwnings) {
-        payload.awning_description = awningDescription
-        payload.awning_items = awningItems.filter(i => i.description)
-        payload.awning_total = calcSectionTotal(awningItems)
-      }
-
-      // Calculate grand total
-      const allTotals = [roofingItems, metalRoofItems, wallPanelItems, awningItems]
-      const grandSum = allTotals.flat().reduce((s, it) => {
-        const t = parseFloat(String(it.total).replace(/[$,]/g, '')) || 0
-        return s + t
-      }, 0)
-      if (grandSum > 0) {
-        payload.grand_total = `$${grandSum.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
-      }
-
+      const payload = buildPayload()
       const res = await proposalAPI.generate(projectId, payload)
 
-      // Download the PDF
       const blob = new Blob([res.data], { type: 'application/pdf' })
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -225,32 +577,146 @@ export default function ProposalTab({ projectId, project }) {
     }
   }
 
+  const handleSave = async () => {
+    setSaving(true)
+    setError('')
+    setSuccess('')
+    try {
+      const payload = buildPayload()
+      const saveData = {
+        proposal_name: `Proposal - ${preparedFor.company || project?.project_name || 'Draft'}`,
+        customer_id: selectedCustomerId,
+        proposal_data: payload,
+      }
+
+      if (currentProposalId) {
+        await savedProposalAPI.update(currentProposalId, saveData)
+        setSuccess('Proposal updated!')
+      } else {
+        const res = await savedProposalAPI.save(projectId, saveData)
+        setCurrentProposalId(res.data.id)
+        setSuccess('Proposal saved!')
+      }
+      setSavedKey(k => k + 1)
+    } catch (err) {
+      setError('Failed to save proposal')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleLoadSaved = async (proposalId) => {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await savedProposalAPI.get(proposalId)
+      const d = res.data.proposal_data
+      setCurrentProposalId(proposalId)
+      setSelectedCustomerId(res.data.customer_id)
+
+      if (d.prepared_for) setPreparedFor(d.prepared_for)
+      setRoofingDescription(d.roofing_system_description || '')
+      setRoofingItems(d.roofing_items || [])
+      setIncludeMetalRoof(d.include_metal_roof || false)
+      setIncludeWallPanels(d.include_wall_panels || false)
+      setIncludeAwnings(d.include_awnings || false)
+      setMetalRoofDescription(d.metal_roof_description || '')
+      setMetalRoofItems(d.metal_roof_items || [])
+      setWallPanelDescription(d.wall_panel_description || '')
+      setWallPanelItems(d.wall_panel_items || [])
+      setAwningDescription(d.awning_description || '')
+      setAwningItems(d.awning_items || [])
+
+      setSuccess('Proposal loaded!')
+    } catch (err) {
+      setError('Failed to load proposal')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleNewProposal = () => {
+    setCurrentProposalId(null)
+    setSelectedCustomerId(null)
+    setPreparedFor({ company: '', contact_name: '', contact_email: '', contact_phone: '' })
+    setRoofingDescription('')
+    setRoofingItems([])
+    setIncludeMetalRoof(false)
+    setIncludeWallPanels(false)
+    setIncludeAwnings(false)
+    setMetalRoofDescription('')
+    setMetalRoofItems([])
+    setWallPanelDescription('')
+    setWallPanelItems([])
+    setAwningDescription('')
+    setAwningItems([])
+    setError('')
+    setSuccess('')
+  }
+
   if (loading) return <LoadingSpinner />
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-lg font-semibold text-gray-900">Proposal Generator</h2>
-        <button
-          onClick={handleGenerate}
-          disabled={generating}
-          className="inline-flex items-center px-5 py-2.5 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50 transition-colors shadow-sm"
-        >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          {generating ? 'Generating PDF...' : 'Generate Proposal PDF'}
-        </button>
+      <div className="flex justify-between items-center flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold text-gray-900">Proposal Generator</h2>
+          {currentProposalId && (
+            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+              Editing saved proposal
+            </span>
+          )}
+        </div>
+        <div className="flex gap-2">
+          {currentProposalId && (
+            <button onClick={handleNewProposal}
+              className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200">
+              + New Proposal
+            </button>
+          )}
+          <button
+            onClick={() => setShowBatchModal(true)}
+            className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200"
+          >
+            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Multi-Customer
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+            </svg>
+            {saving ? 'Saving...' : currentProposalId ? 'Update' : 'Save Draft'}
+          </button>
+          <button
+            onClick={handleGenerate}
+            disabled={generating}
+            className="inline-flex items-center px-5 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 disabled:opacity-50 shadow-sm"
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            {generating ? 'Generating PDF...' : 'Generate PDF'}
+          </button>
+        </div>
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
       {success && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">{success}</div>}
 
+      {/* Saved Proposals */}
+      <SavedProposalsList key={savedKey} projectId={projectId} onLoad={handleLoadSaved} />
+
       {/* Page Toggles */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <h3 className="text-sm font-semibold text-gray-900 mb-3">Proposal Pages</h3>
-        <p className="text-xs text-gray-500 mb-3">Page 1 (Roofing System) and Page 5 (About) are always included.</p>
+        <p className="text-xs text-gray-500 mb-3">Page 1 (Roofing System) and About page are always included.</p>
         <div className="flex flex-wrap gap-4">
           <label className="flex items-center space-x-2 cursor-pointer">
             <input type="checkbox" checked={includeMetalRoof} onChange={e => setIncludeMetalRoof(e.target.checked)}
@@ -270,10 +736,18 @@ export default function ProposalTab({ projectId, project }) {
         </div>
       </div>
 
-      {/* Prepared For */}
+      {/* Customer Selection + Prepared For */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <h3 className="text-sm font-semibold text-gray-900 mb-3">Prepared For</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
+        <CustomerSelector
+          selectedId={selectedCustomerId}
+          onSelect={setSelectedCustomerId}
+          customers={customers}
+          onRefreshCustomers={fetchCustomers}
+        />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Company</label>
             <input type="text" value={preparedFor.company}
@@ -301,7 +775,7 @@ export default function ProposalTab({ projectId, project }) {
         </div>
       </div>
 
-      {/* Page 1: Roofing System (always shown) */}
+      {/* Page 1: Roofing System */}
       <div className="space-y-3">
         <h3 className="text-md font-semibold text-gray-800 flex items-center">
           <span className="bg-primary-100 text-primary-700 text-xs font-bold px-2 py-0.5 rounded mr-2">Page 1</span>
@@ -316,7 +790,7 @@ export default function ProposalTab({ projectId, project }) {
         <LineItemTable title="Roofing Line Items" items={roofingItems} setItems={setRoofingItems} />
       </div>
 
-      {/* Page 2: Metal Roofing (conditional) */}
+      {/* Page 2: Metal Roofing */}
       {includeMetalRoof && (
         <div className="space-y-3">
           <h3 className="text-md font-semibold text-gray-800 flex items-center">
@@ -333,7 +807,7 @@ export default function ProposalTab({ projectId, project }) {
         </div>
       )}
 
-      {/* Page 3: Wall Panels (conditional) */}
+      {/* Page 3: Wall Panels */}
       {includeWallPanels && (
         <div className="space-y-3">
           <h3 className="text-md font-semibold text-gray-800 flex items-center">
@@ -350,7 +824,7 @@ export default function ProposalTab({ projectId, project }) {
         </div>
       )}
 
-      {/* Page 4: Awnings (conditional) */}
+      {/* Page 4: Awnings */}
       {includeAwnings && (
         <div className="space-y-3">
           <h3 className="text-md font-semibold text-gray-800 flex items-center">
@@ -366,6 +840,20 @@ export default function ProposalTab({ projectId, project }) {
           <LineItemTable title="Awning Line Items" items={awningItems} setItems={setAwningItems} />
         </div>
       )}
+
+      {/* Batch Modal */}
+      <BatchProposalModal
+        isOpen={showBatchModal}
+        onClose={() => { setShowBatchModal(false); setSavedKey(k => k + 1) }}
+        customers={customers}
+        projectId={projectId}
+        proposalData={buildPayload()}
+        calcSectionTotal={calcSectionTotal}
+        roofingItems={roofingItems}
+        metalRoofItems={metalRoofItems}
+        wallPanelItems={wallPanelItems}
+        awningItems={awningItems}
+      />
     </div>
   )
 }

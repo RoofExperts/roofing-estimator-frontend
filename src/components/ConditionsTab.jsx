@@ -38,8 +38,8 @@ function PlanAnalysisSection({ projectId, onConditionsChanged }) {
 
   const fetchExtractions = useCallback(async (planFileId) => {
     try {
-      const res = await planAPI.get(planFileId)
-      setExtractions(res.data?.extractions || [])
+      const res = await planAPI.extractions(planFileId)
+      setExtractions(res.data || [])
     } catch (err) {
       setExtractions([])
     }
@@ -94,8 +94,9 @@ function PlanAnalysisSection({ projectId, onConditionsChanged }) {
       return
     }
 
-    // For completed plans, trigger re-analysis via regenerate
+    // For completed plans, trigger re-analysis
     try {
+      await planAPI.reanalyze(planFile.id)
       setPollingId(planFile.id)
     } catch (err) {
       setError('Failed to start analysis')
@@ -231,7 +232,7 @@ function PlanAnalysisSection({ projectId, onConditionsChanged }) {
           >
             {planFiles.map((plan) => (
               <option key={plan.id} value={plan.id}>
-                {plan.file_name} â {plan.upload_status}
+                {plan.file_name} — {plan.upload_status}
                 {plan.page_count ? ` (${plan.page_count} pages)` : ''}
               </option>
             ))}
@@ -371,7 +372,7 @@ function PlanAnalysisSection({ projectId, onConditionsChanged }) {
                     )}
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500 max-w-[200px] truncate" title={ext.source_description}>
-                    {ext.source_description || 'â'}
+                    {ext.source_description || '—'}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     {ext.condition_id ? (
@@ -601,7 +602,7 @@ export default function ConditionsTab({ projectId }) {
                 <tr key={c.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">{c.condition_type}</td>
                   <td className="px-6 py-4 text-sm text-gray-500 max-w-[200px] truncate">
-                    {c.description || 'â'}
+                    {c.description || '—'}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-700">
                     {editingId === c.id ? (
@@ -643,7 +644,7 @@ export default function ConditionsTab({ projectId }) {
                         <option value="3">Zone 3</option>
                       </select>
                     ) : (
-                      c.wind_zone ? `Zone ${c.wind_zone}` : 'â'
+                      c.wind_zone ? `Zone ${c.wind_zone}` : '—'
                     )}
                   </td>
                   <td className="px-6 py-4 text-right text-sm space-x-2">
