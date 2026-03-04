@@ -5,6 +5,29 @@ import { LoadingSpinner } from './common'
 const fmt = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0)
 const fmtNum = (v) => v != null ? Number(v).toLocaleString() : '—'
 
+// Parse pack size from description like "(500/Box)", "(25/Bag)", "(100/CTN)", "(50/Pail)"
+// Returns { packSize: number|null, pieceUnit: string|null }
+function parsePackSize(description) {
+  if (!description) return { packSize: null, pieceUnit: null }
+  // Match patterns like (500/Box), (25/Bag), (100/CTN), (50 per Box), (250/Bucket)
+  const match = description.match(/\((\d+)\s*[/per]+\s*(\w+)\)/i)
+  if (match) {
+    return { packSize: parseInt(match[1]), pieceUnit: match[2] }
+  }
+  return { packSize: null, pieceUnit: null }
+}
+
+// Get the item name for display (strip the pack info to get a clean name)
+function getItemName(description) {
+  if (!description) return ''
+  // Try to extract the core item name before parenthetical pack info
+  // e.g. '5" HVX Fasteners (500/Box)' → 'Fasteners'
+  //      '6" #14 HD Screws (250/Box)' → 'Screws'
+  const words = description.replace(/\(.*?\)/g, '').trim().split(/\s+/)
+  // Return the last word before any parenthetical as the piece name
+  return words[words.length - 1] || 'pcs'
+}
+
 
 // ============================================================================
 // QUANTITY SUMMARY — Shows total estimated qty per item across all groups
@@ -244,7 +267,10 @@ function GroupRows({ group, groupIndex, onEdit, onDelete, onToggleStock, tabKey,
       {/* Item rows */}
       {group.items.map((item, idx) => {
         const totalKey = `${item.description}||${item.unit}`
-        const totalQty = qtyMap?.[totalKey] || item.qty || 0
+        const info = qtyMap?.[totalKey]
+        const totalPieces = info?.totalPieces || item.qty || 0
+        const totalBoxes = info?.totalBoxes || item.qty || 0
+        const hasPack = info?.packSize && info.packSize > 1
 
         return (
           <tr key={idx} className={`border-b border-gray-100 hover:bg-gray-50 ${item.in_stock ? 'bg-green-50/40' : ''}`}>
@@ -267,11 +293,23 @@ function GroupRows({ group, groupIndex, onEdit, onDelete, onToggleStock, tabKey,
                 </span>
               )}
             </td>
-            {/* Total Qty across all groups */}
+            {/* Total Qty — shows individual pieces, not boxes */}
             <td className="px-3 py-1.5 text-right">
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold font-mono bg-purple-50 text-purple-700 border border-purple-200" title="Total qty across all sections">
-                {fmtNum(Math.ceil(totalQty))} {item.unit}
-              </span>
+              {hasPack ? (
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold font-mono bg-purple-50 text-purple-700 border border-purple-200"
+                  title={`${fmtNum(Math.ceil(totalBoxes))} ${item.unit} × ${info.packSize}/${info.pieceUnit} = ${fmtNum(Math.ceil(totalPieces))} ${info.itemName}`}
+                >
+                  {fmtNum(Math.ceil(totalPieces))} {info.itemName}
+                </span>
+              ) : (
+                <span
+                  className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold font-mono bg-purple-50 text-purple-700 border border-purple-200"
+                  title="Total qty across all sections"
+                >
+                  {fmtNum(Math.ceil(totalPieces))} {item.unit}
+                </span>
+              )}
             </td>
             <td className="px-3 py-1.5 text-sm text-gray-700 text-right font-mono">
               <input
@@ -963,6 +1001,7 @@ export default function EstimateTab({ projectId }) {
   const [showAddLabor, setShowAddLabor] = useState(false)
 
   // ---- Aggregate total quantities across all groups ----
+  // Returns { "desc||unit": { totalBoxes, totalPieces, packSize, pieceUnit, itemName } }
   const qtyMap = useMemo(() => {
     if (!takeoff) return {}
     const map = {}
@@ -975,8 +1014,17 @@ export default function EstimateTab({ projectId }) {
       (group.items || []).forEach(item => {
         if (!item.qty || item.qty <= 0) return
         const key = `${item.description}||${item.unit}`
-        if (!map[key]) map[key] = 0
-        map[key] += item.qty
+        if (!map[key]) {
+          const { packSize, pieceUnit } = parsePackSize(item.description)
+          const itemName = getItemName(item.description)
+          map[key] = { totalBoxes: 0, totalPieces: 0, packSize, pieceUnit, itemName }
+        }
+        map[key].totalBoxes += item.qty
+        if (map[key].packSize) {
+          map[key].totalPieces += item.qty * map[key].packSize
+        } else {
+          map[key].totalPieces += item.qty
+        }
       })
     })
     return map
