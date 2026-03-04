@@ -514,6 +514,15 @@ export default function ConditionsTab({ projectId }) {
     }
   }
 
+  const handleSystemTypeChange = async (newSystem) => {
+    try {
+      await projectAPI.update(projectId, { system_type: newSystem })
+      fetchConditions()
+    } catch (err) {
+      setError('Failed to update system type')
+    }
+  }
+
   useEffect(() => {
     fetchConditions()
   }, [fetchConditions])
@@ -586,15 +595,40 @@ export default function ConditionsTab({ projectId }) {
               Smart Build Conditions
             </h3>
             <p className="text-sm text-blue-700 mt-1">
-              Reads your spec analysis + plan extractions to automatically detect the roofing system
-              (TPO/EPDM/PVC), build conditions with the right materials, and estimate perimeter from roof area.
+              Reads your spec analysis + plan extractions to automatically detect the roofing system,
+              build conditions with the right materials, and estimate perimeter from roof area.
             </p>
-            {projectData && (
-              <div className="mt-2 flex gap-3 text-xs text-blue-600">
-                <span>System: <strong>{projectData.system_type || 'Auto-detect'}</strong></span>
-                <span>Spec: <strong>{projectData.analysis_status === 'complete' ? 'Analyzed' : projectData.analysis_status || 'None'}</strong></span>
+
+            {/* System Type Selector */}
+            <div className="mt-3 flex items-center gap-3">
+              <label className="text-xs font-medium text-blue-800">Roofing System:</label>
+              <div className="flex gap-1">
+                {['TPO', 'EPDM', 'PVC'].map(sys => {
+                  const isActive = (projectData?.system_type || '').toUpperCase() === sys
+                  return (
+                    <button
+                      key={sys}
+                      onClick={() => handleSystemTypeChange(sys)}
+                      className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                        isActive
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'bg-white text-blue-700 border border-blue-300 hover:bg-blue-100'
+                      }`}
+                    >
+                      {sys}
+                    </button>
+                  )
+                })}
               </div>
-            )}
+              {!projectData?.system_type && (
+                <span className="text-xs text-amber-600 italic">Auto-detect from spec</span>
+              )}
+              {projectData && (
+                <span className="text-xs text-blue-500 ml-2">
+                  Spec: {projectData.analysis_status === 'complete' ? 'Analyzed' : projectData.analysis_status || 'None'}
+                </span>
+              )}
+            </div>
           </div>
           <button
             onClick={handleSmartBuild}
@@ -628,8 +662,11 @@ export default function ConditionsTab({ projectId }) {
         {smartBuildResult && (
           <div className="mt-4 bg-white/80 rounded-lg border border-blue-100 p-4">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-semibold text-blue-900">
-                Build Result: {smartBuildResult.system_type} System
+              <h4 className="text-sm font-semibold text-blue-900 flex items-center">
+                <span className="inline-flex items-center px-2 py-0.5 bg-blue-600 text-white text-xs font-bold rounded mr-2">
+                  {smartBuildResult.system_type}
+                </span>
+                System Detected from Specs
               </h4>
               <span className="text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded">
                 {smartBuildResult.conditions_created} conditions created
@@ -666,6 +703,10 @@ export default function ConditionsTab({ projectId }) {
                 )}
               </div>
             )}
+
+            <p className="text-xs text-blue-600 mb-3 italic">
+              Review and edit the conditions below before generating the takeoff. Change system type above if needed, then re-run Smart Build.
+            </p>
 
             {/* Created Conditions Preview */}
             {smartBuildResult.conditions && smartBuildResult.conditions.length > 0 && (
