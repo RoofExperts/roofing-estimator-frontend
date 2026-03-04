@@ -155,7 +155,7 @@ function AddItemModal({ onAdd, onClose, groups }) {
 // ============================================================================
 // MATERIAL TABLE
 // ============================================================================
-function MaterialTable({ groups, pageTotal, pageTotalLabel, onEdit, onDelete, onAdd, onToggleStock, tabKey, showAddModal, setShowAddModal }) {
+function MaterialTable({ groups, pageTotal, pageTotalLabel, onEdit, onDelete, onAdd, onToggleStock, tabKey, showAddModal, setShowAddModal, qtyMap }) {
   return (
     <div>
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -167,6 +167,7 @@ function MaterialTable({ groups, pageTotal, pageTotalLabel, onEdit, onDelete, on
               </th>
               <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 w-10">#</th>
               <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600">Description</th>
+              <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 w-24">Total Qty</th>
               <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 w-20">Qty</th>
               <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 w-16">Unit</th>
               <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 w-16">
@@ -180,12 +181,12 @@ function MaterialTable({ groups, pageTotal, pageTotalLabel, onEdit, onDelete, on
           <tbody>
             {groups.map((group, gi) => (
               <GroupRows key={gi} group={group} groupIndex={gi} onEdit={onEdit} onDelete={onDelete}
-                onToggleStock={onToggleStock} tabKey={tabKey} />
+                onToggleStock={onToggleStock} tabKey={tabKey} qtyMap={qtyMap} />
             ))}
           </tbody>
           <tfoot>
             <tr className="bg-gray-100 border-t-2 border-gray-300">
-              <td colSpan={7} className="px-4 py-3 text-sm font-bold text-gray-700 text-right">
+              <td colSpan={8} className="px-4 py-3 text-sm font-bold text-gray-700 text-right">
                 {pageTotalLabel || 'PAGE TOTAL:'}
               </td>
               <td className="px-3 py-3 text-sm font-bold text-gray-900 text-right">{fmt(pageTotal)}</td>
@@ -219,7 +220,7 @@ function MaterialTable({ groups, pageTotal, pageTotalLabel, onEdit, onDelete, on
 }
 
 
-function GroupRows({ group, groupIndex, onEdit, onDelete, onToggleStock, tabKey }) {
+function GroupRows({ group, groupIndex, onEdit, onDelete, onToggleStock, tabKey, qtyMap }) {
   if (!group.items || group.items.length === 0) return null
 
   const handleQtyChange = (itemIndex, value) => {
@@ -236,78 +237,89 @@ function GroupRows({ group, groupIndex, onEdit, onDelete, onToggleStock, tabKey 
     <>
       {/* Category header row */}
       <tr className="bg-blue-50 border-t border-gray-200">
-        <td colSpan={9} className="px-4 py-2 text-xs font-bold text-blue-800 uppercase tracking-wider">
+        <td colSpan={10} className="px-4 py-2 text-xs font-bold text-blue-800 uppercase tracking-wider">
           {group.category}
         </td>
       </tr>
       {/* Item rows */}
-      {group.items.map((item, idx) => (
-        <tr key={idx} className={`border-b border-gray-100 hover:bg-gray-50 ${item.in_stock ? 'bg-green-50/40' : ''}`}>
-          {/* Warehouse stock checkbox */}
-          <td className="px-2 py-1.5 text-center">
-            <input
-              type="checkbox"
-              checked={!!item.in_stock}
-              onChange={() => onToggleStock(tabKey, groupIndex, idx)}
-              className="w-3.5 h-3.5 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer"
-              title={item.in_stock ? 'In warehouse stock' : 'Not in stock'}
-            />
-          </td>
-          <td className="px-3 py-1.5 text-sm text-gray-500 text-center">{item.line || idx + 1}</td>
-          <td className="px-3 py-1.5 text-sm text-gray-900">
-            {item.description}
-            {item.in_stock && (
-              <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700">
-                WH
+      {group.items.map((item, idx) => {
+        const totalKey = `${item.description}||${item.unit}`
+        const totalQty = qtyMap?.[totalKey] || item.qty || 0
+
+        return (
+          <tr key={idx} className={`border-b border-gray-100 hover:bg-gray-50 ${item.in_stock ? 'bg-green-50/40' : ''}`}>
+            {/* Warehouse stock checkbox */}
+            <td className="px-2 py-1.5 text-center">
+              <input
+                type="checkbox"
+                checked={!!item.in_stock}
+                onChange={() => onToggleStock(tabKey, groupIndex, idx)}
+                className="w-3.5 h-3.5 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer"
+                title={item.in_stock ? 'In warehouse stock' : 'Not in stock'}
+              />
+            </td>
+            <td className="px-3 py-1.5 text-sm text-gray-500 text-center">{item.line || idx + 1}</td>
+            <td className="px-3 py-1.5 text-sm text-gray-900">
+              {item.description}
+              {item.in_stock && (
+                <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700">
+                  WH
+                </span>
+              )}
+            </td>
+            {/* Total Qty across all groups */}
+            <td className="px-3 py-1.5 text-right">
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold font-mono bg-purple-50 text-purple-700 border border-purple-200" title="Total qty across all sections">
+                {fmtNum(Math.ceil(totalQty))} {item.unit}
               </span>
-            )}
-          </td>
-          <td className="px-3 py-1.5 text-sm text-gray-700 text-right font-mono">
-            <input
-              type="number"
-              value={typeof item.qty === 'number' ? item.qty : 0}
-              onChange={(e) => handleQtyChange(idx, e.target.value)}
-              className="w-16 px-1.5 py-1 text-right font-mono text-sm border border-gray-300 rounded bg-yellow-50 focus:bg-yellow-100 focus:outline-none focus:ring-1 focus:ring-yellow-400"
-              step="0.01"
-            />
-          </td>
-          <td className="px-3 py-1.5 text-sm text-gray-500">{item.unit}</td>
-          <td className="px-3 py-1.5 text-sm text-gray-700 text-right font-mono">
-            <input
-              type="number"
-              value={item.waste_pct || 0}
-              onChange={(e) => handleWasteChange(idx, e.target.value)}
-              className="w-14 px-1.5 py-1 text-right font-mono text-sm border border-gray-300 rounded bg-orange-50 focus:bg-orange-100 focus:outline-none focus:ring-1 focus:ring-orange-400"
-              step="1" min="0" max="100"
-            />
-          </td>
-          <td className="px-3 py-1.5 text-sm text-gray-700 text-right font-mono">
-            <input
-              type="number"
-              value={item.unit_cost || 0}
-              onChange={(e) => handleUnitCostChange(idx, e.target.value)}
-              className="w-24 px-1.5 py-1 text-right font-mono text-sm border border-gray-300 rounded bg-yellow-50 focus:bg-yellow-100 focus:outline-none focus:ring-1 focus:ring-yellow-400"
-              step="0.01" min="0"
-            />
-          </td>
-          <td className="px-3 py-1.5 text-sm font-medium text-gray-900 text-right font-mono">
-            {fmt(item.extended || 0)}
-          </td>
-          {/* Delete button */}
-          <td className="px-2 py-1.5 text-center">
-            <button
-              onClick={() => onDelete(tabKey, groupIndex, idx)}
-              className="text-gray-300 hover:text-red-500 transition-colors"
-              title="Remove line item"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </td>
-        </tr>
-      ))}
-      <tr><td colSpan={9} className="h-1"></td></tr>
+            </td>
+            <td className="px-3 py-1.5 text-sm text-gray-700 text-right font-mono">
+              <input
+                type="number"
+                value={typeof item.qty === 'number' ? item.qty : 0}
+                onChange={(e) => handleQtyChange(idx, e.target.value)}
+                className="w-16 px-1.5 py-1 text-right font-mono text-sm border border-gray-300 rounded bg-yellow-50 focus:bg-yellow-100 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                step="0.01"
+              />
+            </td>
+            <td className="px-3 py-1.5 text-sm text-gray-500">{item.unit}</td>
+            <td className="px-3 py-1.5 text-sm text-gray-700 text-right font-mono">
+              <input
+                type="number"
+                value={item.waste_pct || 0}
+                onChange={(e) => handleWasteChange(idx, e.target.value)}
+                className="w-14 px-1.5 py-1 text-right font-mono text-sm border border-gray-300 rounded bg-orange-50 focus:bg-orange-100 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                step="1" min="0" max="100"
+              />
+            </td>
+            <td className="px-3 py-1.5 text-sm text-gray-700 text-right font-mono">
+              <input
+                type="number"
+                value={item.unit_cost || 0}
+                onChange={(e) => handleUnitCostChange(idx, e.target.value)}
+                className="w-24 px-1.5 py-1 text-right font-mono text-sm border border-gray-300 rounded bg-yellow-50 focus:bg-yellow-100 focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                step="0.01" min="0"
+              />
+            </td>
+            <td className="px-3 py-1.5 text-sm font-medium text-gray-900 text-right font-mono">
+              {fmt(item.extended || 0)}
+            </td>
+            {/* Delete button */}
+            <td className="px-2 py-1.5 text-center">
+              <button
+                onClick={() => onDelete(tabKey, groupIndex, idx)}
+                className="text-gray-300 hover:text-red-500 transition-colors"
+                title="Remove line item"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </td>
+          </tr>
+        )
+      })}
+      <tr><td colSpan={10} className="h-1"></td></tr>
     </>
   )
 }
@@ -950,6 +962,26 @@ export default function EstimateTab({ projectId }) {
   const [showAddMetals, setShowAddMetals] = useState(false)
   const [showAddLabor, setShowAddLabor] = useState(false)
 
+  // ---- Aggregate total quantities across all groups ----
+  const qtyMap = useMemo(() => {
+    if (!takeoff) return {}
+    const map = {}
+    const allGroups = [
+      ...(takeoff.flat_materials || []),
+      ...(takeoff.metals || []),
+      ...(takeoff.labor || []),
+    ]
+    allGroups.forEach(group => {
+      (group.items || []).forEach(item => {
+        if (!item.qty || item.qty <= 0) return
+        const key = `${item.description}||${item.unit}`
+        if (!map[key]) map[key] = 0
+        map[key] += item.qty
+      })
+    })
+    return map
+  }, [takeoff])
+
   // ---- Load saved estimate on mount ----
   useEffect(() => { loadSavedEstimate() }, [projectId])
 
@@ -1113,7 +1145,6 @@ export default function EstimateTab({ projectId }) {
     { id: 'materials', label: 'Flat Roof Materials' },
     { id: 'metals', label: 'Roof Related Metals' },
     { id: 'labor', label: 'Labor & General Conditions' },
-    { id: 'quantities', label: 'Total Quantities' },
     { id: 'recap', label: 'Recap' },
   ]
 
@@ -1268,6 +1299,7 @@ export default function EstimateTab({ projectId }) {
                   onEdit={handleItemEdit} onDelete={handleDeleteItem} onAdd={handleAddItem}
                   onToggleStock={handleToggleStock} tabKey="flat_materials"
                   showAddModal={showAddMaterials} setShowAddModal={setShowAddMaterials}
+                  qtyMap={qtyMap}
                 />
               </div>
             )}
@@ -1282,6 +1314,7 @@ export default function EstimateTab({ projectId }) {
                   onEdit={handleItemEdit} onDelete={handleDeleteItem} onAdd={handleAddItem}
                   onToggleStock={handleToggleStock} tabKey="metals"
                   showAddModal={showAddMetals} setShowAddModal={setShowAddMetals}
+                  qtyMap={qtyMap}
                 />
               </div>
             )}
@@ -1296,6 +1329,7 @@ export default function EstimateTab({ projectId }) {
                   onEdit={handleItemEdit} onDelete={handleDeleteItem} onAdd={handleAddItem}
                   onToggleStock={handleToggleStock} tabKey="labor"
                   showAddModal={showAddLabor} setShowAddModal={setShowAddLabor}
+                  qtyMap={qtyMap}
                 />
                 {takeoff.warranty_cost > 0 && (
                   <div className="mt-3 bg-white rounded-lg border border-gray-200 px-4 py-3 flex justify-between items-center">
@@ -1303,17 +1337,6 @@ export default function EstimateTab({ projectId }) {
                     <span className="text-sm font-bold text-gray-900 font-mono">{fmt(takeoff.warranty_cost)}</span>
                   </div>
                 )}
-              </div>
-            )}
-
-            {activeTab === 'quantities' && (
-              <div>
-                <h3 className="text-base font-bold text-gray-800 mb-3 uppercase">Total Estimated Quantities</h3>
-                <p className="text-sm text-gray-500 mb-3">
-                  Aggregated quantities across all material pages. Use this to decide if similar items can be consolidated
-                  (e.g., use only 6" screws and delete the 2" line).
-                </p>
-                <QuantitySummary takeoff={takeoff} />
               </div>
             )}
 
