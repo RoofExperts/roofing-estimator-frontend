@@ -134,6 +134,12 @@ export const savedProposalAPI = {
   batchGenerate: (projectId, data) => api.post(`/api/v1/projects/${projectId}/generate-batch-proposals`, data),
 }
 
+// ============= PROPOSAL TYPES =============
+export const proposalTypeAPI = {
+  list: () => api.get('/api/v1/proposal-types'),
+  get: (type) => api.get(`/api/v1/proposal-types/${type}`),
+}
+
 // ============= REFERENCE DATA =============
 export const referenceAPI = {
   conditionTypes: () => api.get('/api/v1/reference/condition-types'),

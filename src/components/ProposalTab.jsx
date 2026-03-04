@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { proposalAPI, estimateAPI, customerAPI, savedProposalAPI } from '../api'
+import { proposalAPI, estimateAPI, customerAPI, savedProposalAPI, proposalTypeAPI } from '../api'
 import { LoadingSpinner } from './common'
 import Modal from './Modal'
 
@@ -427,6 +427,12 @@ export default function ProposalTab({ projectId, project }) {
   const [success, setSuccess] = useState('')
   const [currentProposalId, setCurrentProposalId] = useState(null)
 
+  // Proposal type
+  const [proposalType, setProposalType] = useState('reroof')
+  const [proposalTypes, setProposalTypes] = useState({})
+  const [showSignatureBlock, setShowSignatureBlock] = useState(true)
+  const [showPreparedFor, setShowPreparedFor] = useState(true)
+
   // Customers
   const [customers, setCustomers] = useState([])
   const [selectedCustomerId, setSelectedCustomerId] = useState(null)
@@ -453,6 +459,11 @@ export default function ProposalTab({ projectId, project }) {
   const [wallPanelItems, setWallPanelItems] = useState([])
   const [awningItems, setAwningItems] = useState([])
 
+  // Terms, exclusions, notes
+  const [terms, setTerms] = useState([])
+  const [exclusions, setExclusions] = useState([])
+  const [notes, setNotes] = useState([])
+
   // Batch modal
   const [showBatchModal, setShowBatchModal] = useState(false)
 
@@ -468,8 +479,33 @@ export default function ProposalTab({ projectId, project }) {
     }
   }, [])
 
+  const fetchProposalTypes = useCallback(async () => {
+    try {
+      const res = await proposalTypeAPI.list()
+      setProposalTypes(res.data || {})
+    } catch (err) {
+      // Fallback if endpoint doesn't exist yet
+    }
+  }, [])
+
+  // Apply presets when proposal type changes
+  const applyTypePreset = useCallback((typeKey) => {
+    const preset = proposalTypes[typeKey]
+    if (!preset) return
+
+    setShowSignatureBlock(preset.show_signature_block)
+    setShowPreparedFor(preset.show_prepared_for)
+    setIncludeMetalRoof(preset.default_pages?.include_metal_roof || false)
+    setIncludeWallPanels(preset.default_pages?.include_wall_panels || false)
+    setIncludeAwnings(preset.default_pages?.include_awnings || false)
+    setTerms(preset.default_terms || [])
+    setExclusions(preset.default_exclusions || [])
+    setNotes(preset.default_notes || [])
+  }, [proposalTypes])
+
   useEffect(() => {
     fetchCustomers()
+    fetchProposalTypes()
     loadDefaults()
   }, [projectId])
 
@@ -547,6 +583,14 @@ export default function ProposalTab({ projectId, project }) {
     if (grandSum > 0) {
       payload.grand_total = `$${grandSum.toLocaleString('en-US', { minimumFractionDigits: 2 })}`
     }
+
+    // Proposal type & layout
+    payload.proposal_type = proposalType
+    payload.show_signature_block = showSignatureBlock
+    payload.show_prepared_for = showPreparedFor
+    payload.terms = terms
+    payload.exclusions = exclusions
+    payload.notes = notes
 
     return payload
   }
@@ -627,6 +671,14 @@ export default function ProposalTab({ projectId, project }) {
       setAwningDescription(d.awning_description || '')
       setAwningItems(d.awning_items || [])
 
+      // Proposal type settings
+      if (d.proposal_type) setProposalType(d.proposal_type)
+      if (d.show_signature_block !== undefined) setShowSignatureBlock(d.show_signature_block)
+      if (d.show_prepared_for !== undefined) setShowPreparedFor(d.show_prepared_for)
+      if (d.terms) setTerms(d.terms)
+      if (d.exclusions) setExclusions(d.exclusions)
+      if (d.notes) setNotes(d.notes)
+
       setSuccess('Proposal loaded!')
     } catch (err) {
       setError('Failed to load proposal')
@@ -650,6 +702,12 @@ export default function ProposalTab({ projectId, project }) {
     setWallPanelItems([])
     setAwningDescription('')
     setAwningItems([])
+    setProposalType('reroof')
+    setShowSignatureBlock(true)
+    setShowPreparedFor(true)
+    setTerms([])
+    setExclusions([])
+    setNotes([])
     setError('')
     setSuccess('')
   }
@@ -712,6 +770,64 @@ export default function ProposalTab({ projectId, project }) {
 
       {/* Saved Proposals */}
       <SavedProposalsList key={savedKey} projectId={projectId} onLoad={handleLoadSaved} />
+
+      {/* Proposal Type Selector */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <h3 className="text-sm font-semibold text-gray-900 mb-3">Proposal Type</h3>
+        <div className="flex flex-wrap gap-3">
+          {Object.entries(proposalTypes).length > 0 ? (
+            Object.entries(proposalTypes).map(([key, preset]) => (
+              <button
+                key={key}
+                onClick={() => { setProposalType(key); applyTypePreset(key) }}
+                className={`px-4 py-2.5 rounded-lg text-sm font-medium border transition-all ${
+                  proposalType === key
+                    ? 'bg-primary-600 text-white border-primary-600 shadow-sm'
+                    : 'bg-white text-gray-700 border-gray-300 hover:border-primary-400 hover:bg-primary-50'
+                }`}
+              >
+                <div>{preset.label}</div>
+                <div className={`text-xs mt-0.5 ${proposalType === key ? 'text-primary-200' : 'text-gray-400'}`}>
+                  {preset.description}
+                </div>
+              </button>
+            ))
+          ) : (
+            // Fallback if API not ready
+            <>
+              {[
+                { key: 'gc', label: 'GC / New Construction', desc: 'Bid submission for general contractors' },
+                { key: 'tenant_finish_out', label: 'Tenant Finish Out', desc: 'Bid for TI / finish-out work' },
+                { key: 'reroof', label: 'Re-Roof', desc: 'Full proposal with signature block' },
+              ].map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setProposalType(t.key)}
+                  className={`px-4 py-2.5 rounded-lg text-sm font-medium border transition-all ${
+                    proposalType === t.key
+                      ? 'bg-primary-600 text-white border-primary-600 shadow-sm'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-primary-400 hover:bg-primary-50'
+                  }`}
+                >
+                  <div>{t.label}</div>
+                  <div className={`text-xs mt-0.5 ${proposalType === t.key ? 'text-primary-200' : 'text-gray-400'}`}>
+                    {t.desc}
+                  </div>
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+        {proposalType && proposalTypes[proposalType] && (
+          <div className="mt-3 flex gap-4 text-xs text-gray-500">
+            <span>{showSignatureBlock ? 'Signature block included' : 'No signature block (bid submission)'}</span>
+            <span>|</span>
+            <span>{terms.length} terms</span>
+            <span>|</span>
+            <span>{exclusions.length} exclusions</span>
+          </div>
+        )}
+      </div>
 
       {/* Page Toggles */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -838,6 +954,63 @@ export default function ProposalTab({ projectId, project }) {
               placeholder="Awning and canopy system details..." />
           </div>
           <LineItemTable title="Awning Line Items" items={awningItems} setItems={setAwningItems} />
+        </div>
+      )}
+
+      {/* Terms, Exclusions, Notes */}
+      {(terms.length > 0 || exclusions.length > 0 || notes.length > 0) && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+          <h3 className="text-sm font-semibold text-gray-900">
+            Terms, Exclusions &amp; Notes
+            <span className="text-xs font-normal text-gray-400 ml-2">
+              (auto-filled from {proposalTypes[proposalType]?.label || proposalType} template — editable)
+            </span>
+          </h3>
+
+          {exclusions.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Exclusions ({exclusions.length})
+              </label>
+              <textarea
+                value={exclusions.join('\n')}
+                onChange={e => setExclusions(e.target.value.split('\n').filter(l => l.trim()))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                rows={Math.min(exclusions.length + 1, 8)}
+                placeholder="One exclusion per line..."
+              />
+            </div>
+          )}
+
+          {notes.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Notes ({notes.length})
+              </label>
+              <textarea
+                value={notes.join('\n')}
+                onChange={e => setNotes(e.target.value.split('\n').filter(l => l.trim()))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                rows={Math.min(notes.length + 1, 6)}
+                placeholder="One note per line..."
+              />
+            </div>
+          )}
+
+          {terms.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Terms &amp; Conditions ({terms.length})
+              </label>
+              <textarea
+                value={terms.join('\n')}
+                onChange={e => setTerms(e.target.value.split('\n').filter(l => l.trim()))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                rows={Math.min(terms.length + 1, 10)}
+                placeholder="One term per line..."
+              />
+            </div>
+          )}
         </div>
       )}
 
