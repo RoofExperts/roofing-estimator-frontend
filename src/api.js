@@ -91,6 +91,7 @@ export const planAPI = {
 export const estimateAPI = {
   calculate: (projectId) => api.post(`/api/v1/projects/${projectId}/calculate-estimate`),
   get: (projectId) => api.get(`/api/v1/projects/${projectId}/estimate`),
+  takeoff: (projectId) => api.get(`/api/v1/projects/${projectId}/takeoff`),
 }
 
 // ============= PROPOSALS =============
