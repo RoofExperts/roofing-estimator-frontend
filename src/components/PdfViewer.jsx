@@ -1,10 +1,23 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css'
 import 'react-pdf/dist/esm/Page/TextLayer.css'
 
 // PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`
+
+// Build file source with auth headers for protected backend URLs
+function getAuthenticatedFile(url) {
+  if (!url) return null
+  const token = localStorage.getItem('authToken')
+  if (token && !url.startsWith('blob:')) {
+    return {
+      url,
+      httpHeaders: { Authorization: `Bearer ${token}` },
+    }
+  }
+  return url
+}
 
 export default function PdfViewer({ url, onClose }) {
   const [numPages, setNumPages] = useState(null)
@@ -81,6 +94,8 @@ export default function PdfViewer({ url, onClose }) {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [currentPage, numPages])
+
+  const fileSource = useMemo(() => getAuthenticatedFile(url), [url])
 
   if (!url) return null
 
@@ -189,7 +204,7 @@ export default function PdfViewer({ url, onClose }) {
           <div className="w-48 bg-gray-850 border-r border-gray-700 overflow-y-auto flex-shrink-0"
                style={{ backgroundColor: '#1a1d23' }}>
             <div className="p-2 space-y-2">
-              <Document file={url} onLoadSuccess={() => {}} loading="">
+              <Document file={fileSource} onLoadSuccess={() => {}} loading="">
                 {numPages && Array.from({ length: numPages }, (_, i) => i + 1).map((pageNum) => (
                   <div
                     key={pageNum}

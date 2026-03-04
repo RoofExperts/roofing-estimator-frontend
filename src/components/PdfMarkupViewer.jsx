@@ -1,9 +1,22 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css'
 import 'react-pdf/dist/esm/Page/TextLayer.css'
 
 pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`
+
+// Build file source with auth headers for protected backend URLs
+function getAuthenticatedFile(url) {
+  if (!url) return null
+  const token = localStorage.getItem('authToken')
+  if (token && !url.startsWith('blob:')) {
+    return {
+      url,
+      httpHeaders: { Authorization: `Bearer ${token}` },
+    }
+  }
+  return url
+}
 
 // ============================================================================
 // TOOL TYPES
@@ -711,6 +724,7 @@ export default function PdfMarkupViewer({ url, onClose, onSaveMeasurements }) {
   // Count total annotations
   const totalAnnotations = Object.values(annotations).flat().length
   const totalMeasurements = Object.values(measurements).flat().length
+  const fileSource = useMemo(() => getAuthenticatedFile(url), [url])
 
   if (!url) return null
 
@@ -974,7 +988,7 @@ export default function PdfMarkupViewer({ url, onClose, onSaveMeasurements }) {
         {sidebarOpen && (
           <div className="w-44 border-r border-gray-700 overflow-y-auto flex-shrink-0" style={{ backgroundColor: '#1a1d23' }}>
             <div className="p-2 space-y-2">
-              <Document file={url} onLoadSuccess={() => {}} loading="">
+              <Document file={fileSource} onLoadSuccess={() => {}} loading="">
                 {numPages && Array.from({ length: numPages }, (_, i) => i + 1).map((pageNum) => (
                   <div key={pageNum}
                     ref={(el) => { thumbRefs.current[pageNum] = el }}
@@ -1025,7 +1039,7 @@ export default function PdfMarkupViewer({ url, onClose, onSaveMeasurements }) {
             </div>
           )}
 
-          <Document file={url} onLoadSuccess={onDocumentLoadSuccess} onLoadError={onDocumentLoadError} loading="">
+          <Document file={fileSource} onLoadSuccess={onDocumentLoadSuccess} onLoadError={onDocumentLoadError} loading="">
             <div className="py-4 px-2 flex justify-center">
               <div
                 ref={pageWrapperRef}
