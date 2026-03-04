@@ -107,6 +107,8 @@ export const estimateAPI = {
   calculate: (projectId) => api.post(`/api/v1/projects/${projectId}/calculate-estimate`),
   get: (projectId) => api.get(`/api/v1/projects/${projectId}/estimate`),
   takeoff: (projectId) => api.get(`/api/v1/projects/${projectId}/takeoff`),
+  save: (projectId, estimateData) => api.post(`/api/v1/projects/${projectId}/save-estimate`, { estimate_data: estimateData }),
+  load: (projectId) => api.get(`/api/v1/projects/${projectId}/saved-estimate`),
 }
 
 // ============= PROPOSALS =============

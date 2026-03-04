@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { estimateAPI } from '../api'
 import { LoadingSpinner } from './common'
 
@@ -204,15 +204,82 @@ function ProjectSummaryTab({ summary }) {
 export default function EstimateTab({ projectId }) {
   const [takeoff, setTakeoff] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [loadingInitial, setLoadingInitial] = useState(true)
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('summary')
+  const [saving, setSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState(null) // 'saved', 'saving', 'error', 'unsaved'
+  const [savedVersion, setSavedVersion] = useState(null)
+  const [lastSavedAt, setLastSavedAt] = useState(null)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const saveTimerRef = useRef(null)
 
+  // ---- Load saved estimate on mount ----
+  useEffect(() => {
+    loadSavedEstimate()
+  }, [projectId])
+
+  const loadSavedEstimate = async () => {
+    try {
+      const res = await estimateAPI.load(projectId)
+      if (res.data.saved) {
+        setTakeoff(res.data.estimate_data)
+        setSavedVersion(res.data.version)
+        setLastSavedAt(res.data.updated_at)
+        setSaveStatus('saved')
+      }
+    } catch (err) {
+      // No saved estimate — that's fine
+    } finally {
+      setLoadingInitial(false)
+    }
+  }
+
+  // ---- Save estimate to backend ----
+  const saveEstimate = useCallback(async (data) => {
+    if (!data) return
+    setSaving(true)
+    setSaveStatus('saving')
+    try {
+      const res = await estimateAPI.save(projectId, data)
+      setSavedVersion(res.data.version)
+      setLastSavedAt(new Date().toISOString())
+      setSaveStatus('saved')
+      setHasUnsavedChanges(false)
+    } catch (err) {
+      setSaveStatus('error')
+      console.error('Failed to save estimate:', err)
+    } finally {
+      setSaving(false)
+    }
+  }, [projectId])
+
+  // ---- Auto-save on changes (debounced) ----
+  const debouncedSave = useCallback((data) => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    setHasUnsavedChanges(true)
+    setSaveStatus('unsaved')
+    saveTimerRef.current = setTimeout(() => {
+      saveEstimate(data)
+    }, 2000) // 2 second debounce
+  }, [saveEstimate])
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    }
+  }, [])
+
+  // ---- Generate takeoff ----
   const fetchTakeoff = async () => {
     setLoading(true)
     setError('')
     try {
       const res = await estimateAPI.takeoff(projectId)
       setTakeoff(res.data)
+      // Auto-save immediately after generating
+      await saveEstimate(res.data)
     } catch (err) {
       const detail = err.response?.data?.detail
       if (typeof detail === 'string') {
@@ -276,6 +343,9 @@ export default function EstimateTab({ projectId }) {
         updated.summary.cost_summary.grand_total = grandTotal
       }
 
+      // Trigger debounced auto-save
+      debouncedSave(updated)
+
       return updated
     })
   }
@@ -287,33 +357,101 @@ export default function EstimateTab({ projectId }) {
     { id: 'labor', label: 'Labor & General Conditions' },
   ]
 
+  if (loadingInitial) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <LoadingSpinner />
+      </div>
+    )
+  }
+
   return (
     <div>
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-lg font-semibold text-gray-900">Material Takeoff & Estimate</h2>
-        <button
-          onClick={fetchTakeoff}
-          disabled={loading}
-          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-        >
-          {loading ? (
-            <>
-              <svg className="animate-spin w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              Generating...
-            </>
-          ) : (
-            <>
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-              </svg>
-              {takeoff ? 'Regenerate Takeoff' : 'Generate Takeoff'}
-            </>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold text-gray-900">Material Takeoff & Estimate</h2>
+          {/* Save status indicator */}
+          {takeoff && (
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+              saveStatus === 'saved' ? 'bg-green-50 text-green-700' :
+              saveStatus === 'saving' ? 'bg-blue-50 text-blue-700' :
+              saveStatus === 'unsaved' ? 'bg-yellow-50 text-yellow-700' :
+              saveStatus === 'error' ? 'bg-red-50 text-red-700' :
+              'bg-gray-50 text-gray-500'
+            }`}>
+              {saveStatus === 'saved' && (
+                <>
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Saved{savedVersion ? ` (v${savedVersion})` : ''}
+                </>
+              )}
+              {saveStatus === 'saving' && (
+                <>
+                  <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Saving...
+                </>
+              )}
+              {saveStatus === 'unsaved' && (
+                <>
+                  <div className="w-2 h-2 rounded-full bg-yellow-500" />
+                  Unsaved changes
+                </>
+              )}
+              {saveStatus === 'error' && (
+                <>
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  Save failed
+                </>
+              )}
+            </span>
           )}
-        </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Manual save button */}
+          {takeoff && hasUnsavedChanges && (
+            <button
+              onClick={() => saveEstimate(takeoff)}
+              disabled={saving}
+              className="inline-flex items-center px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+            >
+              <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+              </svg>
+              {saving ? 'Saving...' : 'Save Now'}
+            </button>
+          )}
+          <button
+            onClick={fetchTakeoff}
+            disabled={loading}
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            {loading ? (
+              <>
+                <svg className="animate-spin w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Generating...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                {takeoff ? 'Regenerate Takeoff' : 'Generate Takeoff'}
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {error && (
