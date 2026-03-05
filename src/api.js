@@ -72,11 +72,18 @@ export const projectAPI = {
 // ============= CONDITIONS =============
 export const conditionAPI = {
   list: (projectId) => api.get(`/api/v1/projects/${projectId}/conditions`),
+  listWithMaterials: (projectId) => api.get(`/api/v1/projects/${projectId}/conditions-with-materials`),
   get: (id) => api.get(`/api/v1/conditions/${id}`),
   create: (projectId, data) => api.post(`/api/v1/projects/${projectId}/conditions`, data),
   update: (id, data) => api.put(`/api/v1/conditions/${id}`, data),
   delete: (id) => api.delete(`/api/v1/conditions/${id}`),
   smartBuild: (projectId) => api.post(`/api/v1/projects/${projectId}/smart-build-conditions`),
+  populateMaterials: (projectId) => api.post(`/api/v1/projects/${projectId}/populate-materials`),
+  // Condition Materials CRUD
+  listMaterials: (conditionId) => api.get(`/api/v1/conditions/${conditionId}/materials`),
+  addMaterial: (conditionId, data) => api.post(`/api/v1/conditions/${conditionId}/materials`, data),
+  updateMaterial: (materialId, data) => api.put(`/api/v1/condition-materials/${materialId}`, data),
+  deleteMaterial: (materialId) => api.delete(`/api/v1/condition-materials/${materialId}`),
 }
 
 // ============= VISION / PLANS =============
