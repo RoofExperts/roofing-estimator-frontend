@@ -172,6 +172,11 @@ export const referenceAPI = {
   materialsForType: (type) => api.get(`/api/v1/reference/condition-types/${type}/materials`),
   materialTemplates: () => api.get('/api/v1/material-templates'),
   costDatabase: () => api.get('/api/v1/cost-database'),
+  uploadPricing: (formData) => {
+    return api.post('/api/v1/cost-database/upload-pricing', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
 }
 
 export default api
