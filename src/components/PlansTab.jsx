@@ -18,6 +18,7 @@ export default function PlansTab({ projectId }) {
   const [dragOver, setDragOver] = useState(false)
   const [viewingPlan, setViewingPlan] = useState(null)
   const [viewMode, setViewMode] = useState('markup') // 'markup' or 'basic'
+  const [progressMap, setProgressMap] = useState({}) // planId -> { progress_message, detected_scale }
 
   const fetchPlans = async () => {
     try {
@@ -31,6 +32,34 @@ export default function PlansTab({ projectId }) {
   }
 
   useEffect(() => { fetchPlans() }, [projectId])
+
+  // Poll progress for any plans in processing/pending state
+  useEffect(() => {
+    const processingPlans = plans.filter(p => ['processing', 'pending'].includes(p.upload_status || p.status))
+    if (processingPlans.length === 0) return
+
+    const interval = setInterval(async () => {
+      let shouldRefresh = false
+      for (const plan of processingPlans) {
+        try {
+          const res = await planAPI.status(plan.id)
+          const data = res.data
+          setProgressMap(prev => ({ ...prev, [plan.id]: data }))
+          // If status changed to completed or failed, refresh the plans list
+          if (data.status === 'completed' || data.status === 'failed') {
+            shouldRefresh = true
+          }
+        } catch (err) {
+          console.error('Failed to poll plan status:', err)
+        }
+      }
+      if (shouldRefresh) {
+        fetchPlans()
+      }
+    }, 5000) // Poll every 5 seconds
+
+    return () => clearInterval(interval)
+  }, [plans])
 
   const handleUpload = async (file) => {
     if (!file || !file.name.toLowerCase().endsWith('.pdf')) {
@@ -179,6 +208,23 @@ export default function PlansTab({ projectId }) {
                 <div>
                   <p className="text-sm font-medium text-gray-900">{plan.file_name || plan.filename || `Plan #${plan.id}`}</p>
                   <p className="text-xs text-gray-500">{plan.page_count || '?'} pages</p>
+                  {/* Live progress indicator */}
+                  {['processing', 'pending'].includes(plan.upload_status || plan.status) && progressMap[plan.id] && (
+                    <div className="mt-1">
+                      {progressMap[plan.id].progress_message && (
+                        <p className="text-xs text-blue-600 font-medium flex items-center">
+                          <svg className="animate-spin w-3 h-3 mr-1" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                          {progressMap[plan.id].progress_message}
+                        </p>
+                      )}
+                      {progressMap[plan.id].detected_scale && (
+                        <p className="text-xs text-green-600">Scale: {progressMap[plan.id].detected_scale}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex items-center space-x-3">
@@ -251,9 +297,25 @@ export default function PlansTab({ projectId }) {
                     </button>
                   </>
                 ) : (
-                  <p className="text-sm text-gray-500 text-center py-4">
-                    {(plan.upload_status || plan.status) === 'processing' ? 'Analysis in progress...' : 'No extractions found.'}
-                  </p>
+                  <div className="text-sm text-gray-500 text-center py-4">
+                    {['processing', 'pending'].includes(plan.upload_status || plan.status) ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-center space-x-2">
+                          <svg className="animate-spin w-5 h-5 text-blue-500" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                          <span className="text-blue-600 font-medium">
+                            {progressMap[plan.id]?.progress_message || 'Analysis in progress...'}
+                          </span>
+                        </div>
+                        {progressMap[plan.id]?.detected_scale && (
+                          <p className="text-xs text-green-600">Scale detected: {progressMap[plan.id].detected_scale}</p>
+                        )}
+                        <p className="text-xs text-gray-400">This may take several minutes for large plans</p>
+                      </div>
+                    ) : 'No extractions found.'}
+                  </div>
                 )}
               </div>
             )}
