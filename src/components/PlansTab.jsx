@@ -72,7 +72,7 @@ export default function PlansTab({ projectId }) {
 
   const updateExtraction = async (extractionId) => {
     try {
-      await planAPI.updateExtraction(extractionId, { value: parseFloat(editValue) })
+      await planAPI.updateExtraction(extractionId, { measurement_value: parseFloat(editValue) })
       setEditingExtraction(null)
       if (expandedPlan) {
         setExpandedPlan(null)
@@ -177,7 +177,7 @@ export default function PlansTab({ projectId }) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{plan.filename || `Plan #${plan.id}`}</p>
+                  <p className="text-sm font-medium text-gray-900">{plan.file_name || plan.filename || `Plan #${plan.id}`}</p>
                   <p className="text-xs text-gray-500">{plan.page_count || '?'} pages</p>
                 </div>
               </div>
@@ -196,7 +196,7 @@ export default function PlansTab({ projectId }) {
                   </svg>
                   {viewingPlan?.id === plan.id ? 'Hide' : 'View & Markup'}
                 </button>
-                <StatusBadge status={plan.status} />
+                <StatusBadge status={plan.upload_status || plan.status} />
                 <svg className={`w-5 h-5 text-gray-400 transform transition-transform ${expandedPlan === plan.id ? 'rotate-180' : ''}`}
                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -223,21 +223,21 @@ export default function PlansTab({ projectId }) {
                               {editingExtraction === ext.id ? (
                                 <input type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)}
                                   className="w-24 px-2 py-1 border rounded text-sm" autoFocus />
-                              ) : (<span className="font-medium">{ext.value}</span>)}
+                              ) : (<span className="font-medium">{ext.measurement_value ?? ext.value}</span>)}
                             </td>
-                            <td className="px-4 py-2 text-sm text-gray-500">{ext.unit}</td>
+                            <td className="px-4 py-2 text-sm text-gray-500">{ext.measurement_unit || ext.unit}</td>
                             <td className="px-4 py-2 text-sm">
                               <span className={`px-2 py-0.5 rounded-full text-xs ${
-                                ext.confidence > 0.8 ? 'bg-green-100 text-green-800' :
-                                ext.confidence > 0.5 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
-                              }`}>{(ext.confidence * 100).toFixed(0)}%</span>
+                                (ext.confidence_score ?? ext.confidence) > 0.8 ? 'bg-green-100 text-green-800' :
+                                (ext.confidence_score ?? ext.confidence) > 0.5 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                              }`}>{(((ext.confidence_score ?? ext.confidence) || 0) * 100).toFixed(0)}%</span>
                             </td>
                             <td className="px-4 py-2 text-right text-sm">
                               {editingExtraction === ext.id ? (
                                 <><button onClick={() => updateExtraction(ext.id)} className="text-green-600 hover:text-green-800 mr-2">Save</button>
                                 <button onClick={() => setEditingExtraction(null)} className="text-gray-600">Cancel</button></>
                               ) : (
-                                <button onClick={() => { setEditingExtraction(ext.id); setEditValue(ext.value) }}
+                                <button onClick={() => { setEditingExtraction(ext.id); setEditValue(ext.measurement_value ?? ext.value) }}
                                   className="text-primary-600 hover:text-primary-800">Edit</button>
                               )}
                             </td>
@@ -252,7 +252,7 @@ export default function PlansTab({ projectId }) {
                   </>
                 ) : (
                   <p className="text-sm text-gray-500 text-center py-4">
-                    {plan.status === 'processing' ? 'Analysis in progress...' : 'No extractions found.'}
+                    {(plan.upload_status || plan.status) === 'processing' ? 'Analysis in progress...' : 'No extractions found.'}
                   </p>
                 )}
               </div>
