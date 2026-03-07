@@ -192,7 +192,7 @@ function FlatRoofMaterialsPage({ materials }) {
   })
 
   const { sections, sectionOrder } = groupIntoSections(flatMats)
-  const pageTotal = flatMats.reduce((s, m) => s + (m.total_cost || 0), 0)
+  const pageTotal = flatMats.reduce((s, m) => s + (m.purchase_cost || m.total_cost || 0), 0)
 
   let lineNum = 0
 
@@ -206,14 +206,13 @@ function FlatRoofMaterialsPage({ materials }) {
         <table className="min-w-full text-sm">
           <thead>
             <tr className="bg-gray-100 border-b border-gray-300">
-              <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 w-10">#</th>
-              <th className="px-4 py-3 text-left text-xs font-bold text-gray-600">Description</th>
-              <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-20">Qty</th>
-              <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-20">Waste %</th>
-              <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-24">Rounded Qty</th>
-              <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 w-16">Unit</th>
-              <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-24">Unit Cost</th>
-              <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-28">Extended Cost</th>
+              <th className="px-3 py-3 text-left text-xs font-bold text-gray-600 w-10">#</th>
+              <th className="px-3 py-3 text-left text-xs font-bold text-gray-600">Description</th>
+              <th className="px-3 py-3 text-right text-xs font-bold text-gray-600 w-24">Item Count</th>
+              <th className="px-3 py-3 text-right text-xs font-bold text-gray-600 w-16">Qty</th>
+              <th className="px-3 py-3 text-center text-xs font-bold text-gray-600 w-16">Unit</th>
+              <th className="px-3 py-3 text-right text-xs font-bold text-gray-600 w-24">Unit Cost</th>
+              <th className="px-3 py-3 text-right text-xs font-bold text-gray-600 w-28">Extended Cost</th>
             </tr>
           </thead>
           <tbody>
@@ -223,30 +222,49 @@ function FlatRoofMaterialsPage({ materials }) {
                 <tbody key={sectionLabel}>
                   {/* Section Header */}
                   <tr className="bg-blue-50 border-t-2 border-blue-200">
-                    <td colSpan={8} className="px-4 py-2.5 text-xs font-bold text-blue-800 uppercase tracking-wider">
+                    <td colSpan={7} className="px-3 py-2.5 text-xs font-bold text-blue-800 uppercase tracking-wider">
                       {sectionLabel}
                     </td>
                   </tr>
                   {items.map((mat) => {
                     lineNum++
-                    const baseQty = mat.total_qty / (1 + (mat.waste_pct || 0))
-                    const wastePct = mat.waste_pct || 0
-                    const roundedQty = Math.ceil(mat.total_qty)
-                    const unitCost = mat.unit_cost + (mat.labor_cost || 0)
-                    const extCost = mat.total_cost
+                    const hasPurchaseUnit = mat.purchase_unit && mat.units_per_purchase
+                    const displayName = mat.product_name || mat.material_name
+                    // If purchase unit info exists, show purchase qty and unit
+                    const purchaseQty = mat.purchase_qty || Math.ceil(mat.total_qty)
+                    const displayUnit = hasPurchaseUnit ? mat.purchase_unit : fmtUnit(mat.unit)
+                    // Item count = total base qty (for reference)
+                    const itemCount = hasPurchaseUnit ? fmtNum(mat.total_qty) + ' ' + fmtUnit(mat.unit) : null
+                    // Unit cost per purchase unit
+                    const perUnitCost = hasPurchaseUnit
+                      ? (mat.units_per_purchase * (mat.unit_cost + (mat.labor_cost || 0)))
+                      : (mat.unit_cost + (mat.labor_cost || 0))
+                    const extCost = mat.purchase_cost || mat.total_cost
 
                     return (
-                      <tr key={mat.material_name} className="border-t border-gray-100 hover:bg-gray-50">
-                        <td className="px-4 py-2.5 text-gray-500 font-mono text-xs">{lineNum}</td>
-                        <td className="px-4 py-2.5 font-medium text-gray-800">{mat.material_name}</td>
-                        <td className="px-4 py-2.5 text-right font-mono text-gray-700">{fmtNum(mat.total_qty)}</td>
-                        <td className="px-4 py-2.5 text-right font-mono text-gray-500">
-                          {wastePct > 0 ? `${(wastePct * 100).toFixed(0)}%` : '—'}
+                      <tr key={mat.material_name + mat.unit} className="border-t border-gray-100 hover:bg-gray-50">
+                        <td className="px-3 py-2.5 text-gray-500 font-mono text-xs">{lineNum}</td>
+                        <td className="px-3 py-2.5">
+                          <div className="font-medium text-gray-800">{displayName}</div>
+                          {hasPurchaseUnit && (
+                            <div className="text-xs text-gray-400">
+                              {fmtNum(mat.units_per_purchase)} {fmtUnit(mat.unit)} per {mat.purchase_unit.toLowerCase()}
+                            </div>
+                          )}
                         </td>
-                        <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-800">{fmtNum(roundedQty)}</td>
-                        <td className="px-4 py-2.5 text-center text-gray-600">{fmtUnit(mat.unit)}</td>
-                        <td className="px-4 py-2.5 text-right font-mono text-gray-700">{unitCost > 0 ? fmt(unitCost) : '—'}</td>
-                        <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-900">{extCost > 0 ? fmt(extCost) : '—'}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-xs text-gray-500">
+                          {itemCount || '—'}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-mono font-semibold text-gray-800">
+                          {fmtNum(purchaseQty)}
+                        </td>
+                        <td className="px-3 py-2.5 text-center text-gray-600">{displayUnit}</td>
+                        <td className="px-3 py-2.5 text-right font-mono text-gray-700">
+                          {perUnitCost > 0 ? fmt(perUnitCost) : '—'}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-mono font-semibold text-gray-900">
+                          {extCost > 0 ? fmt(extCost) : '—'}
+                        </td>
                       </tr>
                     )
                   })}
@@ -256,10 +274,10 @@ function FlatRoofMaterialsPage({ materials }) {
           </tbody>
           <tfoot>
             <tr className="bg-gray-100 border-t-2 border-gray-400">
-              <td colSpan={7} className="px-4 py-3 text-right text-sm font-bold text-gray-700 uppercase">
+              <td colSpan={6} className="px-3 py-3 text-right text-sm font-bold text-gray-700 uppercase">
                 Page 2 Total:
               </td>
-              <td className="px-4 py-3 text-right font-mono font-bold text-gray-900 text-base">
+              <td className="px-3 py-3 text-right font-mono font-bold text-gray-900 text-base">
                 {fmt(pageTotal)}
               </td>
             </tr>
@@ -310,15 +328,30 @@ function RoofMetalsPage({ materials }) {
           </thead>
           <tbody>
             {metals.map((mat, i) => {
-              const unitCost = mat.unit_cost + (mat.labor_cost || 0)
+              const hasPurchaseUnit = mat.purchase_unit && mat.units_per_purchase
+              const displayName = mat.product_name || mat.material_name
+              const purchaseQty = mat.purchase_qty || Math.ceil(mat.total_qty)
+              const displayUnit = hasPurchaseUnit ? mat.purchase_unit : fmtUnit(mat.unit)
+              const perUnitCost = hasPurchaseUnit
+                ? (mat.units_per_purchase * (mat.unit_cost + (mat.labor_cost || 0)))
+                : (mat.unit_cost + (mat.labor_cost || 0))
+              const extCost = mat.purchase_cost || mat.total_cost
+
               return (
                 <tr key={mat.material_name} className="border-t border-gray-100 hover:bg-gray-50">
                   <td className="px-4 py-2.5 text-gray-500 font-mono text-xs">{i + 1}</td>
-                  <td className="px-4 py-2.5 font-medium text-gray-800">{mat.material_name}</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-gray-700">{fmtNum(Math.ceil(mat.total_qty))}</td>
-                  <td className="px-4 py-2.5 text-center text-gray-600">{fmtUnit(mat.unit)}</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-gray-700">{unitCost > 0 ? fmt(unitCost) : '—'}</td>
-                  <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-900">{mat.total_cost > 0 ? fmt(mat.total_cost) : '—'}</td>
+                  <td className="px-4 py-2.5">
+                    <div className="font-medium text-gray-800">{displayName}</div>
+                    {hasPurchaseUnit && (
+                      <div className="text-xs text-gray-400">
+                        {fmtNum(mat.units_per_purchase)} {fmtUnit(mat.unit)} per {mat.purchase_unit.toLowerCase()}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono text-gray-700">{fmtNum(purchaseQty)}</td>
+                  <td className="px-4 py-2.5 text-center text-gray-600">{displayUnit}</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-gray-700">{perUnitCost > 0 ? fmt(perUnitCost) : '—'}</td>
+                  <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-900">{extCost > 0 ? fmt(extCost) : '—'}</td>
                 </tr>
               )
             })}
