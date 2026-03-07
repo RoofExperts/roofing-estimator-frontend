@@ -237,8 +237,15 @@ function ProjectSummaryPage({ summary, totals, pricing, onPricingChange }) {
 // PAGE 2: FLAT ROOF MATERIALS
 // ============================================================================
 function FlatRoofMaterialsPage({ materials, onUpdateMaterial }) {
-  // Filter out metals (they go on Page 3)
-  const flatMats = (materials || []).filter(m => !isMetalItem(m))
+  // Filter out metals (Page 3) and non-field fasteners (perimeter, wall_flashing, penetration)
+  const flatMats = (materials || []).filter(m => {
+    if (isMetalItem(m)) return false
+    // Only show fasteners that belong to field conditions
+    if (m.material_category === 'fastener' && m.condition_types) {
+      return m.condition_types.includes('field')
+    }
+    return true
+  })
 
   if (flatMats.length === 0) {
     return <div className="text-center py-8 text-gray-400 text-sm">No flat roof materials in estimate</div>
