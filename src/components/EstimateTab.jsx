@@ -600,138 +600,13 @@ function LaborPage({ summary }) {
 // ============================================================================
 // PAGE 5: RECAP
 // ============================================================================
-function RecapPage({ materials, summary, pricing, onPricingChange, onUpdateMaterial }) {
+function RecapPage({ materials, summary, pricing, onPricingChange }) {
   const allMats = materials || []
   const t = computeTotals(allMats, summary, pricing)
 
-  // Build recap rows: all materials sorted by category
-  const sortedMats = [...allMats].sort((a, b) => {
-    const ai = CATEGORY_ORDER.indexOf(a.material_category || 'accessory')
-    const bi = CATEGORY_ORDER.indexOf(b.material_category || 'accessory')
-    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
-  })
-
-  const { sections, sectionOrder } = groupIntoSections(sortedMats)
-  let lineNum = 0
-
   return (
-    <div className="space-y-6">
-      {/* Materials Recap Table */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="bg-gray-800 px-6 py-4">
-          <h2 className="text-lg font-bold text-white tracking-wide">COST RECAP</h2>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm table-fixed">
-            <colgroup>
-              <col className="w-10" />
-              <col />
-              <col className="w-24" />
-              <col className="w-16" />
-              <col className="w-16" />
-              <col className="w-16" />
-              <col className="w-28" />
-              <col className="w-32" />
-            </colgroup>
-            <thead>
-              <tr className="bg-gray-100 border-b border-gray-300">
-                <th className="px-3 py-3 text-left text-xs font-bold text-gray-600">#</th>
-                <th className="px-3 py-3 text-left text-xs font-bold text-gray-600">Description</th>
-                <th className="px-3 py-3 text-right text-xs font-bold text-gray-600">Item Count</th>
-                <th className="px-3 py-3 text-center text-xs font-bold text-gray-600">Waste %</th>
-                <th className="px-3 py-3 text-right text-xs font-bold text-gray-600">Qty</th>
-                <th className="px-3 py-3 text-center text-xs font-bold text-gray-600">Unit</th>
-                <th className="px-3 py-3 text-right text-xs font-bold text-gray-600">Unit Cost</th>
-                <th className="px-3 py-3 text-right text-xs font-bold text-gray-600">Extended Cost</th>
-              </tr>
-            </thead>
-            {sectionOrder.map((sectionLabel) => {
-              const items = sections[sectionLabel]
-              return (
-                <tbody key={sectionLabel}>
-                  <tr className="bg-blue-50 border-t-2 border-blue-200">
-                    <td colSpan={8} className="px-3 py-2.5 text-xs font-bold text-blue-800 uppercase tracking-wider">
-                      {sectionLabel}
-                    </td>
-                  </tr>
-                  {items.map((mat) => {
-                    lineNum++
-                    const hasPurchaseUnit = mat.purchase_unit && mat.units_per_purchase
-                    const displayName = mat.product_name || mat.material_name
-                    const purchaseQty = mat.purchase_qty || Math.ceil(mat.total_qty)
-                    const displayUnit = hasPurchaseUnit ? mat.purchase_unit : fmtUnit(mat.unit)
-                    const itemCount = hasPurchaseUnit ? fmtNum(mat.total_qty) + ' ' + fmtUnit(mat.unit) : null
-                    const perUnitCost = hasPurchaseUnit
-                      ? (mat.units_per_purchase * (mat.unit_cost + (mat.labor_cost || 0)))
-                      : (mat.unit_cost + (mat.labor_cost || 0))
-                    const extCost = perUnitCost * purchaseQty
-                    const wastePct = mat.waste_pct || 0
-                    const matKey = mat._idx
-
-                    return (
-                      <tr key={mat.material_name + mat.unit} className="border-t border-gray-100 hover:bg-gray-50">
-                        <td className="px-3 py-2.5 text-gray-500 font-mono text-xs">{lineNum}</td>
-                        <td className="px-3 py-2.5">
-                          <div className="font-medium text-gray-800">{displayName}</div>
-                          {hasPurchaseUnit && (
-                            <div className="text-xs text-gray-400">
-                              {fmtNum(mat.units_per_purchase)} {fmtUnit(mat.unit)} per {mat.purchase_unit.toLowerCase()}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-mono text-xs text-gray-500">
-                          {itemCount || '—'}
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          <EditableCell
-                            value={Math.round(wastePct * 100)}
-                            onSave={(v) => onUpdateMaterial(matKey, 'waste_pct', v / 100)}
-                            suffix="%"
-                            className="text-xs font-mono"
-                          />
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-mono font-semibold text-gray-800">
-                          {fmtNum(purchaseQty)}
-                        </td>
-                        <td className="px-3 py-2.5 text-center text-gray-600">{displayUnit}</td>
-                        <td className="px-3 py-2.5 text-right">
-                          <EditableCell
-                            value={parseFloat(perUnitCost.toFixed(2))}
-                            onSave={(v) => {
-                              const baseCost = hasPurchaseUnit
-                                ? (v / mat.units_per_purchase) - (mat.labor_cost || 0)
-                                : v - (mat.labor_cost || 0)
-                              onUpdateMaterial(matKey, 'unit_cost', Math.max(0, baseCost))
-                            }}
-                            prefix="$"
-                            className="font-mono text-gray-700"
-                          />
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-mono font-semibold text-gray-900">
-                          {extCost > 0 ? fmt(extCost) : '—'}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              )
-            })}
-            <tfoot>
-              <tr className="bg-gray-100 border-t-2 border-gray-400">
-                <td colSpan={7} className="px-3 py-3 text-right text-sm font-bold text-gray-700 uppercase">
-                  Materials Subtotal:
-                </td>
-                <td className="px-3 py-3 text-right font-mono font-bold text-gray-900 text-base">
-                  {fmt(t.materialTotal)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
-
-      {/* Pricing Summary with Editable Fields */}
+    <div>
+      {/* Project Totals */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         <div className="bg-gray-800 px-6 py-4">
           <h2 className="text-lg font-bold text-white tracking-wide">PROJECT TOTALS</h2>
@@ -1298,7 +1173,6 @@ export default function EstimateTab({ projectId }) {
               summary={estimate.summary}
               pricing={pricing}
               onPricingChange={setPricing}
-              onUpdateMaterial={handleUpdateMaterial}
             />
           )}
         </div>
