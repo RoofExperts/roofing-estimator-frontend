@@ -84,6 +84,7 @@ export const conditionAPI = {
   addMaterial: (conditionId, data) => api.post(`/api/v1/conditions/${conditionId}/materials`, data),
   updateMaterial: (materialId, data) => api.put(`/api/v1/condition-materials/${materialId}`, data),
   deleteMaterial: (materialId) => api.delete(`/api/v1/condition-materials/${materialId}`),
+  reorderMaterials: (conditionId, items) => api.put(`/api/v1/conditions/${conditionId}/materials/reorder`, { items }),
   searchCostDatabase: (q = '', category = '') => {
     const params = new URLSearchParams()
     if (q) params.append('q', q)

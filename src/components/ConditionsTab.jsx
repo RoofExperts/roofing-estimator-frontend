@@ -37,14 +37,24 @@ const BoltIcon = ({ className = 'w-5 h-5' }) => (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
   </svg>
 )
-const SwapIcon = ({ className = 'w-4 h-4' }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-  </svg>
-)
 const SearchIcon = ({ className = 'w-4 h-4' }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+  </svg>
+)
+const ArrowUpIcon = ({ className = 'w-4 h-4' }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+  </svg>
+)
+const ArrowDownIcon = ({ className = 'w-4 h-4' }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+  </svg>
+)
+const PencilIcon = ({ className = 'w-4 h-4' }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
   </svg>
 )
 
@@ -53,6 +63,35 @@ const UNIT_LABELS = { sqft: 'SF', lnft: 'LF', each: 'EA' }
 const fmtUnit = (u) => UNIT_LABELS[u] || u
 const fmtNum = (v) => v != null ? Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'
 const fmtMoney = (v) => v != null ? '$' + Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
+
+// Pretty condition type labels
+const TYPE_LABELS = {
+  field: 'Field', wall_flashing: 'Wall Flashing', roof_drain: 'Roof Drain',
+  scupper: 'Scupper', pipe_flashing: 'Pipe Flashing', coping: 'Coping',
+  perimeter: 'Perimeter', curb: 'Curb', penetration: 'Penetration',
+  corner: 'Corner', expansion_joint: 'Expansion Joint', edge_detail: 'Edge Detail',
+  transition: 'Transition', parapet: 'Parapet', custom: 'Custom',
+}
+
+// Condition type colors for card headers
+const TYPE_COLORS = {
+  field:            { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-800', badge: 'bg-blue-100 text-blue-800', accent: 'border-l-blue-500' },
+  wall_flashing:    { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-800', badge: 'bg-amber-100 text-amber-800', accent: 'border-l-amber-500' },
+  roof_drain:       { bg: 'bg-cyan-50', border: 'border-cyan-200', text: 'text-cyan-800', badge: 'bg-cyan-100 text-cyan-800', accent: 'border-l-cyan-500' },
+  scupper:          { bg: 'bg-teal-50', border: 'border-teal-200', text: 'text-teal-800', badge: 'bg-teal-100 text-teal-800', accent: 'border-l-teal-500' },
+  pipe_flashing:    { bg: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-800', badge: 'bg-violet-100 text-violet-800', accent: 'border-l-violet-500' },
+  coping:           { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', badge: 'bg-orange-100 text-orange-800', accent: 'border-l-orange-500' },
+  perimeter:        { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-800', badge: 'bg-green-100 text-green-800', accent: 'border-l-green-500' },
+  curb:             { bg: 'bg-pink-50', border: 'border-pink-200', text: 'text-pink-800', badge: 'bg-pink-100 text-pink-800', accent: 'border-l-pink-500' },
+  penetration:      { bg: 'bg-rose-50', border: 'border-rose-200', text: 'text-rose-800', badge: 'bg-rose-100 text-rose-800', accent: 'border-l-rose-500' },
+  corner:           { bg: 'bg-indigo-50', border: 'border-indigo-200', text: 'text-indigo-800', badge: 'bg-indigo-100 text-indigo-800', accent: 'border-l-indigo-500' },
+  expansion_joint:  { bg: 'bg-gray-50', border: 'border-gray-300', text: 'text-gray-800', badge: 'bg-gray-100 text-gray-800', accent: 'border-l-gray-500' },
+  edge_detail:      { bg: 'bg-lime-50', border: 'border-lime-200', text: 'text-lime-800', badge: 'bg-lime-100 text-lime-800', accent: 'border-l-lime-500' },
+  transition:       { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-800', badge: 'bg-emerald-100 text-emerald-800', accent: 'border-l-emerald-500' },
+  parapet:          { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-800', badge: 'bg-yellow-100 text-yellow-800', accent: 'border-l-yellow-500' },
+  custom:           { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-800', badge: 'bg-slate-100 text-slate-800', accent: 'border-l-slate-500' },
+}
+const getColors = (type) => TYPE_COLORS[type] || TYPE_COLORS.custom
 
 // ============================================================================
 // COST DATABASE SEARCH INPUT — dropdown that searches the cost DB
@@ -95,22 +134,22 @@ function CostDbSearchInput({ category, onSelect, placeholder = 'Search materials
   return (
     <div className="relative">
       <div className="relative">
-        <SearchIcon className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+        <SearchIcon className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
           type="text"
           value={query}
           onChange={handleChange}
           onFocus={handleFocus}
           onBlur={() => setTimeout(() => setOpen(false), 200)}
-          className="w-full pl-7 pr-2 py-1.5 border border-gray-300 rounded text-sm"
+          className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-primary-500 focus:border-primary-500"
           placeholder={placeholder}
         />
       </div>
       {open && (
-        <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
-          {loading && <div className="px-3 py-2 text-xs text-gray-400">Searching...</div>}
+        <div className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-xl">
+          {loading && <div className="px-3 py-3 text-xs text-gray-400 text-center">Searching...</div>}
           {!loading && results.length === 0 && (
-            <div className="px-3 py-2 text-xs text-gray-400">No matches found</div>
+            <div className="px-3 py-3 text-xs text-gray-400 text-center">No matches found</div>
           )}
           {results.map((item) => (
             <button
@@ -118,13 +157,13 @@ function CostDbSearchInput({ category, onSelect, placeholder = 'Search materials
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => handleSelect(item)}
-              className="w-full text-left px-3 py-2 hover:bg-primary-50 border-b border-gray-50 last:border-0"
+              className="w-full text-left px-3 py-2.5 hover:bg-primary-50 border-b border-gray-50 last:border-0 transition-colors"
             >
               <div className="text-sm font-medium text-gray-900">{item.material_name}</div>
-              <div className="text-xs text-gray-500 flex gap-3">
+              <div className="text-xs text-gray-500 flex gap-3 mt-0.5">
                 {item.manufacturer && <span>{item.manufacturer}</span>}
                 <span>{fmtUnit(item.unit)}</span>
-                <span>{fmtMoney(item.unit_cost)}/{item.unit}</span>
+                <span className="font-medium">{fmtMoney(item.unit_cost)}/{item.unit}</span>
                 {item.product_name && <span className="text-gray-400">{item.product_name}</span>}
               </div>
             </button>
@@ -135,29 +174,11 @@ function CostDbSearchInput({ category, onSelect, placeholder = 'Search materials
   )
 }
 
-// Condition type colors for the accordion headers
-const TYPE_COLORS = {
-  field:            'bg-blue-50 border-blue-200 text-blue-800',
-  wall_flashing:    'bg-amber-50 border-amber-200 text-amber-800',
-  roof_drain:       'bg-cyan-50 border-cyan-200 text-cyan-800',
-  scupper:          'bg-teal-50 border-teal-200 text-teal-800',
-  pipe_flashing:    'bg-violet-50 border-violet-200 text-violet-800',
-  coping:           'bg-orange-50 border-orange-200 text-orange-800',
-  perimeter:        'bg-green-50 border-green-200 text-green-800',
-  curb:             'bg-pink-50 border-pink-200 text-pink-800',
-  penetration:      'bg-rose-50 border-rose-200 text-rose-800',
-  corner:           'bg-indigo-50 border-indigo-200 text-indigo-800',
-  expansion_joint:  'bg-gray-50 border-gray-300 text-gray-800',
-  edge_detail:      'bg-lime-50 border-lime-200 text-lime-800',
-  transition:       'bg-emerald-50 border-emerald-200 text-emerald-800',
-  parapet:          'bg-yellow-50 border-yellow-200 text-yellow-800',
-  custom:           'bg-slate-50 border-slate-200 text-slate-800',
-}
 
 // ============================================================================
-// MATERIAL ROW — Inline editable row inside a condition accordion
+// MATERIAL ITEM — Mini-card for each material inside a condition card
 // ============================================================================
-function MaterialRow({ material, onUpdate, onDelete, onSwap }) {
+function MaterialItem({ material, index, totalCount, conditionMeasurement, onUpdate, onDelete, onMove }) {
   const [editing, setEditing] = useState(false)
   const [values, setValues] = useState({})
   const [saving, setSaving] = useState(false)
@@ -168,7 +189,6 @@ function MaterialRow({ material, onUpdate, onDelete, onSwap }) {
       coverage_rate: material.coverage_rate,
       waste_factor: material.waste_factor,
       override_quantity: material.override_quantity ?? '',
-      is_included: material.is_included,
       notes: material.notes || '',
     })
   }
@@ -180,166 +200,201 @@ function MaterialRow({ material, onUpdate, onDelete, onSwap }) {
         coverage_rate: parseFloat(values.coverage_rate) || 0,
         waste_factor: parseFloat(values.waste_factor) || 0,
         override_quantity: values.override_quantity !== '' ? parseFloat(values.override_quantity) : null,
-        is_included: values.is_included,
         notes: values.notes || null,
       })
       setEditing(false)
-    } finally {
-      setSaving(false)
-    }
+    } finally { setSaving(false) }
   }
 
   const toggleIncluded = async () => {
     await onUpdate(material.id, { is_included: !material.is_included })
   }
 
+  // Compute quantity: measurement * coverage * (1 + waste)
+  const meas = conditionMeasurement || 0
+  const coverage = material.coverage_rate || 1
+  const waste = material.waste_factor || 0
+  const computedQty = material.override_quantity || (meas * coverage * (1 + waste))
+  const unitCost = material.unit_cost || 0
+  const lineTotal = computedQty * unitCost
+
   return (
-    <tr className={`text-sm ${!material.is_included ? 'opacity-50 bg-gray-50' : 'hover:bg-gray-50'}`}>
-      {/* Toggle */}
-      <td className="px-3 py-2 text-center">
-        <input
-          type="checkbox"
-          checked={material.is_included}
-          onChange={toggleIncluded}
-          className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
-        />
-      </td>
-      {/* Material Name + Category + Cost DB Status */}
-      <td className="px-3 py-2">
-        <div className="font-medium text-gray-900">{material.material_name}</div>
-        <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-xs text-gray-400">{material.material_category}</span>
-          {material.cost_database_item_id ? (
-            <span className="inline-flex items-center text-[10px] font-medium text-green-700 bg-green-50 px-1.5 py-0.5 rounded-full">
-              <svg className="w-2.5 h-2.5 mr-0.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-              Linked
-            </span>
-          ) : material.unit_cost > 0 ? (
-            <span className="inline-flex items-center text-[10px] font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-full">
-              ~ Fuzzy match
-            </span>
-          ) : (
-            <span className="inline-flex items-center text-[10px] font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full">
-              ✗ No match
-            </span>
+    <div className={`group relative border rounded-lg p-3 transition-all ${
+      !material.is_included
+        ? 'bg-gray-50 border-gray-200 opacity-50'
+        : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm'
+    }`}>
+      <div className="flex items-start gap-3">
+        {/* Toggle checkbox */}
+        <div className="pt-0.5">
+          <input
+            type="checkbox"
+            checked={material.is_included}
+            onChange={toggleIncluded}
+            className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
+          />
+        </div>
+
+        {/* Main content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-medium text-sm text-gray-900">{material.material_name}</span>
+            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{material.material_category}</span>
+            {material.cost_database_item_id ? (
+              <span className="inline-flex items-center text-[10px] font-medium text-green-700 bg-green-50 px-1.5 py-0.5 rounded-full">
+                <svg className="w-2.5 h-2.5 mr-0.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                Linked
+              </span>
+            ) : unitCost > 0 ? (
+              <span className="inline-flex items-center text-[10px] font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-full">~ Fuzzy</span>
+            ) : (
+              <span className="inline-flex items-center text-[10px] font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full">No price</span>
+            )}
+          </div>
+
+          {/* Stats row */}
+          {!editing && (
+            <div className="flex items-center gap-4 mt-1.5 text-xs text-gray-500">
+              <span>Coverage: <span className="font-mono text-gray-700">{coverage}</span></span>
+              <span>Waste: <span className="font-mono text-gray-700">{(waste * 100).toFixed(0)}%</span></span>
+              <span>Qty: <span className="font-mono text-gray-700">{fmtNum(computedQty)}</span> {fmtUnit(material.unit)}</span>
+              {unitCost > 0 && <span>@ {fmtMoney(unitCost)}</span>}
+              {lineTotal > 0 && <span className="font-medium text-gray-700">= {fmtMoney(lineTotal)}</span>}
+            </div>
+          )}
+
+          {/* Edit form */}
+          {editing && (
+            <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2">
+              <div>
+                <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Coverage Rate</label>
+                <input
+                  type="number"
+                  step="0.001"
+                  value={values.coverage_rate}
+                  onChange={(e) => setValues({ ...values, coverage_rate: e.target.value })}
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Waste Factor</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={values.waste_factor}
+                  onChange={(e) => setValues({ ...values, waste_factor: e.target.value })}
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Override Qty</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={values.override_quantity}
+                  onChange={(e) => setValues({ ...values, override_quantity: e.target.value })}
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                  placeholder="Auto"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Notes</label>
+                <input
+                  type="text"
+                  value={values.notes}
+                  onChange={(e) => setValues({ ...values, notes: e.target.value })}
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                  placeholder="Optional"
+                />
+              </div>
+              <div className="col-span-2 md:col-span-4 flex justify-end gap-2 mt-1">
+                <button onClick={() => setEditing(false)} className="px-3 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">
+                  Cancel
+                </button>
+                <button onClick={save} disabled={saving} className="px-3 py-1 text-xs text-white bg-primary-600 hover:bg-primary-700 rounded disabled:opacity-50">
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
           )}
         </div>
-      </td>
-      {/* Unit */}
-      <td className="px-3 py-2 text-gray-600">{fmtUnit(material.unit)}</td>
-      {/* Coverage Rate */}
-      <td className="px-3 py-2">
-        {editing ? (
-          <input
-            type="number"
-            step="0.001"
-            value={values.coverage_rate}
-            onChange={(e) => setValues({ ...values, coverage_rate: e.target.value })}
-            className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
-          />
-        ) : (
-          <span className="font-mono text-gray-700">{material.coverage_rate}</span>
-        )}
-      </td>
-      {/* Waste % */}
-      <td className="px-3 py-2">
-        {editing ? (
-          <input
-            type="number"
-            step="0.01"
-            value={values.waste_factor}
-            onChange={(e) => setValues({ ...values, waste_factor: e.target.value })}
-            className="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
-          />
-        ) : (
-          <span className="font-mono text-gray-700">{(material.waste_factor * 100).toFixed(0)}%</span>
-        )}
-      </td>
-      {/* Actions */}
-      <td className="px-3 py-2 text-right whitespace-nowrap">
-        {editing ? (
-          <div className="flex items-center justify-end gap-2">
+
+        {/* Right side actions */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Reorder arrows */}
+          <div className="flex flex-col">
             <button
-              onClick={save}
-              disabled={saving}
-              className="text-xs text-green-700 hover:text-green-900 font-medium"
+              onClick={() => onMove(index, 'up')}
+              disabled={index === 0}
+              className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Move up"
             >
-              {saving ? 'Saving...' : 'Save'}
+              <ArrowUpIcon className="w-3.5 h-3.5" />
             </button>
             <button
-              onClick={() => setEditing(false)}
-              className="text-xs text-gray-500 hover:text-gray-700"
+              onClick={() => onMove(index, 'down')}
+              disabled={index === totalCount - 1}
+              className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Move down"
             >
-              Cancel
+              <ArrowDownIcon className="w-3.5 h-3.5" />
             </button>
           </div>
-        ) : (
-          <div className="flex items-center justify-end gap-2">
-            {material.cost_database_item_id ? (
-              <button
-                onClick={() => onSwap(material)}
-                className="text-xs text-green-600 hover:text-green-800 font-medium flex items-center gap-0.5"
-                title="Swap to a different product from cost database"
-              >
-                <SwapIcon className="w-3 h-3" />
-                Swap
-              </button>
-            ) : (
-              <button
-                onClick={() => onSwap(material)}
-                className="text-xs text-amber-600 hover:text-amber-800 font-semibold bg-amber-50 border border-amber-200 px-2 py-0.5 rounded flex items-center gap-1"
-                title="Link this material to a product in your cost database"
-              >
-                <SwapIcon className="w-3 h-3" />
-                Link
-              </button>
-            )}
+          {!editing && (
             <button
               onClick={startEdit}
-              className="text-xs text-primary-600 hover:text-primary-800"
+              className="p-1 text-gray-400 hover:text-primary-600 transition-colors"
+              title="Edit material parameters"
             >
-              Edit
+              <PencilIcon className="w-3.5 h-3.5" />
             </button>
-            <button
-              onClick={() => onDelete(material.id)}
-              className="text-xs text-red-500 hover:text-red-700"
-            >
-              <TrashIcon className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
-      </td>
-    </tr>
+          )}
+          <button
+            onClick={() => onDelete(material.id)}
+            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+            title="Remove material"
+          >
+            <TrashIcon className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
+
 // ============================================================================
-// CONDITION CARD — Accordion card for one condition with materials table
+// CONDITION CARD — Expandable card for one condition with material stack
 // ============================================================================
 function ConditionCard({ condition, onRefresh, onToggleActive, isSystemCondition }) {
   const [expanded, setExpanded] = useState(false)
-  const [editingCondition, setEditingCondition] = useState(false)
-  const [condValues, setCondValues] = useState({})
+  const [editingMeasurement, setEditingMeasurement] = useState(false)
+  const [measValue, setMeasValue] = useState(condition.measurement_value)
+  const [measUnit, setMeasUnit] = useState(condition.measurement_unit)
+  const [editingDesc, setEditingDesc] = useState(false)
+  const [descValue, setDescValue] = useState(condition.description || '')
   const [addingMaterial, setAddingMaterial] = useState(false)
-  const [newMat, setNewMat] = useState({
-    material_name: '', material_category: 'membrane', unit: 'sqft',
-    coverage_rate: 1, waste_factor: 0.1, calc_type: 'standard',
-    cost_database_item_id: null,
-  })
-  const [swapMaterial, setSwapMaterial] = useState(null) // material being swapped
   const [error, setError] = useState('')
 
   const materials = condition.materials || []
-  const includedCount = materials.filter(m => m.is_included).length
-  const colors = TYPE_COLORS[condition.condition_type] || TYPE_COLORS.custom
+  const includedMats = materials.filter(m => m.is_included)
+  const colors = getColors(condition.condition_type)
 
+  // Total material cost for this condition
+  const totalCost = includedMats.reduce((sum, m) => {
+    const meas = condition.measurement_value || 0
+    const coverage = m.coverage_rate || 1
+    const waste = m.waste_factor || 0
+    const qty = m.override_quantity || (meas * coverage * (1 + waste))
+    return sum + (qty * (m.unit_cost || 0))
+  }, 0)
+
+  // --- Material CRUD ---
   const handleUpdateMaterial = async (materialId, data) => {
     try {
       await conditionAPI.updateMaterial(materialId, data)
       onRefresh()
-    } catch (err) {
-      setError('Failed to update material')
-    }
+    } catch { setError('Failed to update material') }
   }
 
   const handleDeleteMaterial = async (materialId) => {
@@ -347,69 +402,55 @@ function ConditionCard({ condition, onRefresh, onToggleActive, isSystemCondition
     try {
       await conditionAPI.deleteMaterial(materialId)
       onRefresh()
-    } catch (err) {
-      setError('Failed to delete material')
-    }
+    } catch { setError('Failed to delete material') }
   }
 
-  const handleAddMaterial = async (e) => {
-    e.preventDefault()
+  const handleAddFromCostDb = async (costItem) => {
     try {
       await conditionAPI.addMaterial(condition.id, {
-        ...newMat,
-        coverage_rate: parseFloat(newMat.coverage_rate),
-        waste_factor: parseFloat(newMat.waste_factor),
-        cost_database_item_id: newMat.cost_database_item_id,
+        cost_database_item_id: costItem.id,
+        coverage_rate: 1.0,
+        waste_factor: 0.10,
       })
       setAddingMaterial(false)
-      setNewMat({ material_name: '', material_category: 'membrane', unit: 'sqft', coverage_rate: 1, waste_factor: 0.1, calc_type: 'standard', cost_database_item_id: null })
       onRefresh()
-    } catch (err) {
-      setError('Failed to add material')
-    }
+    } catch { setError('Failed to add material') }
   }
 
-  const handleSwapProduct = async (costItem) => {
-    if (!swapMaterial) return
-    try {
-      await conditionAPI.updateMaterial(swapMaterial.id, {
-        material_name: costItem.material_name,
-        cost_database_item_id: costItem.id,
-      })
-      setSwapMaterial(null)
-      onRefresh()
-    } catch (err) {
-      setError('Failed to swap product')
-    }
-  }
-
-  const startConditionEdit = () => {
-    setEditingCondition(true)
-    setCondValues({
-      measurement_value: condition.measurement_value,
-      measurement_unit: condition.measurement_unit,
-      wind_zone: condition.wind_zone || '1',
-      description: condition.description || '',
-      flashing_height: condition.flashing_height || '',
-      fastener_spacing: condition.fastener_spacing || '',
+  const handleMoveMaterial = async (index, direction) => {
+    const sorted = [...materials].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+    const swapIdx = direction === 'up' ? index - 1 : index + 1
+    if (swapIdx < 0 || swapIdx >= sorted.length) return
+    // Build new order
+    const items = sorted.map((m, i) => {
+      if (i === index) return { material_id: m.id, sort_order: swapIdx }
+      if (i === swapIdx) return { material_id: m.id, sort_order: index }
+      return { material_id: m.id, sort_order: i }
     })
+    try {
+      await conditionAPI.reorderMaterials(condition.id, items)
+      onRefresh()
+    } catch { setError('Failed to reorder') }
   }
 
-  const saveConditionEdit = async () => {
+  // --- Inline measurement edit ---
+  const saveMeasurement = async () => {
     try {
       await conditionAPI.update(condition.id, {
-        measurement_value: parseFloat(condValues.measurement_value),
-        measurement_unit: condValues.measurement_unit,
-        wind_zone: condValues.wind_zone,
-        description: condValues.description,
-        flashing_height: condValues.flashing_height ? parseFloat(condValues.flashing_height) : null,
-        fastener_spacing: condValues.fastener_spacing ? parseInt(condValues.fastener_spacing) : null,
+        measurement_value: parseFloat(measValue),
+        measurement_unit: measUnit,
       })
-      setEditingCondition(false)
+      setEditingMeasurement(false)
       onRefresh()
-    } catch (err) {
-      setError('Failed to update condition')
-    }
+    } catch { setError('Failed to update measurement') }
+  }
+
+  const saveDescription = async () => {
+    try {
+      await conditionAPI.update(condition.id, { description: descValue })
+      setEditingDesc(false)
+      onRefresh()
+    } catch { setError('Failed to update') }
   }
 
   const handleDeleteCondition = async () => {
@@ -417,57 +458,94 @@ function ConditionCard({ condition, onRefresh, onToggleActive, isSystemCondition
     try {
       await conditionAPI.delete(condition.id)
       onRefresh()
-    } catch (err) {
-      setError('Failed to delete condition')
-    }
+    } catch { setError('Failed to delete condition') }
   }
 
+  const sortedMaterials = [...materials].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+
   return (
-    <div className={`border rounded-lg overflow-hidden ${expanded ? 'shadow-md' : 'shadow-sm'} transition-shadow`}>
-      {/* Accordion Header */}
+    <div className={`border rounded-xl overflow-hidden border-l-4 ${colors.accent} ${expanded ? 'shadow-md' : 'shadow-sm hover:shadow-md'} transition-all bg-white`}>
+      {/* Card Header */}
       <div
-        className={`flex items-center justify-between px-4 py-3 cursor-pointer select-none border-l-4 ${colors}`}
+        className="flex items-center justify-between px-4 py-3.5 cursor-pointer select-none"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          {expanded ? <ChevronDown className="w-5 h-5 flex-shrink-0" /> : <ChevronRight className="w-5 h-5 flex-shrink-0" />}
+          <div className="flex-shrink-0">
+            {expanded ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
+          </div>
+
+          {/* Type badge */}
+          <span className={`inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-md ${colors.badge}`}>
+            {TYPE_LABELS[condition.condition_type] || condition.condition_type}
+          </span>
+
+          {/* Label / Description */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-sm">{condition.label || condition.condition_type}</span>
-              <span className="text-xs px-2 py-0.5 rounded bg-white/60 font-mono">
-                {fmtNum(condition.measurement_value)} {fmtUnit(condition.measurement_unit)}
-              </span>
-              {condition.wind_zone && condition.wind_zone !== '1' && (
-                <span className="text-xs px-1.5 py-0.5 rounded bg-white/60">WZ{condition.wind_zone}</span>
+              {condition.label && condition.label !== condition.condition_type && (
+                <span className="text-sm font-medium text-gray-900 truncate">{condition.label}</span>
+              )}
+              {condition.description && (
+                <span className="text-xs text-gray-500 truncate">{condition.description}</span>
               )}
             </div>
-            {condition.description && (
-              <p className="text-xs opacity-70 truncate mt-0.5">{condition.description}</p>
+          </div>
+
+          {/* Measurement value — click to edit */}
+          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+            {editingMeasurement ? (
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={measValue}
+                  onChange={(e) => setMeasValue(e.target.value)}
+                  className="w-24 px-2 py-1 border border-primary-300 rounded text-sm font-mono focus:ring-primary-500 focus:border-primary-500"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter') saveMeasurement(); if (e.key === 'Escape') setEditingMeasurement(false) }}
+                />
+                <select
+                  value={measUnit}
+                  onChange={(e) => setMeasUnit(e.target.value)}
+                  className="px-1 py-1 border border-gray-300 rounded text-xs"
+                >
+                  <option value="sqft">SF</option>
+                  <option value="lnft">LF</option>
+                  <option value="each">EA</option>
+                </select>
+                <button onClick={saveMeasurement} className="text-xs text-green-700 font-medium hover:text-green-900 px-1">Save</button>
+                <button onClick={() => setEditingMeasurement(false)} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setMeasValue(condition.measurement_value); setMeasUnit(condition.measurement_unit); setEditingMeasurement(true) }}
+                className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors group"
+                title="Click to edit measurement"
+              >
+                <span className="text-sm font-bold font-mono text-gray-800">{fmtNum(condition.measurement_value)}</span>
+                <span className="text-xs font-medium text-gray-500">{fmtUnit(condition.measurement_unit)}</span>
+                <PencilIcon className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-3 text-xs flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-          <span className="bg-white/70 px-2 py-0.5 rounded">
-            {includedCount}/{materials.length} materials
+
+        {/* Right side info */}
+        <div className="flex items-center gap-3 ml-3 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          {condition.wind_zone && condition.wind_zone !== '1' && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-medium">WZ{condition.wind_zone}</span>
+          )}
+          <span className="text-xs text-gray-500">
+            {includedMats.length}/{materials.length} materials
           </span>
-          <button
-            onClick={startConditionEdit}
-            className="text-xs hover:underline opacity-70 hover:opacity-100"
-          >
-            Edit
-          </button>
-          {isSystemCondition && onToggleActive && (
-            <button
-              onClick={onToggleActive}
-              className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 hover:bg-amber-200"
-              title="Disable this condition"
-            >
-              Disable
-            </button>
+          {totalCost > 0 && (
+            <span className="text-xs font-medium text-gray-700">{fmtMoney(totalCost)}</span>
           )}
           <button
             onClick={handleDeleteCondition}
-            className="text-red-600 hover:text-red-800 opacity-70 hover:opacity-100"
+            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+            title="Delete condition"
           >
             <TrashIcon className="w-4 h-4" />
           </button>
@@ -476,245 +554,64 @@ function ConditionCard({ condition, onRefresh, onToggleActive, isSystemCondition
 
       {/* Expanded Content */}
       {expanded && (
-        <div className="bg-white">
+        <div className="border-t border-gray-100">
           {error && (
-            <div className="mx-4 mt-3 bg-red-50 border border-red-200 rounded p-2 text-xs text-red-700 flex items-center justify-between">
+            <div className="mx-4 mt-3 bg-red-50 border border-red-200 rounded-lg p-2 text-xs text-red-700 flex items-center justify-between">
               {error}
               <button onClick={() => setError('')} className="text-red-400 hover:text-red-600 ml-2">&times;</button>
             </div>
           )}
 
-          {/* Condition Edit Form (inline) */}
-          {editingCondition && (
-            <div className="mx-4 mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Measurement</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={condValues.measurement_value}
-                    onChange={(e) => setCondValues({ ...condValues, measurement_value: e.target.value })}
-                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+          {/* Material Stack */}
+          <div className="p-4">
+            {sortedMaterials.length > 0 ? (
+              <div className="space-y-2">
+                {sortedMaterials.map((mat, idx) => (
+                  <MaterialItem
+                    key={mat.id}
+                    material={mat}
+                    index={idx}
+                    totalCount={sortedMaterials.length}
+                    conditionMeasurement={condition.measurement_value}
+                    onUpdate={handleUpdateMaterial}
+                    onDelete={handleDeleteMaterial}
+                    onMove={handleMoveMaterial}
                   />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Unit</label>
-                  <select
-                    value={condValues.measurement_unit}
-                    onChange={(e) => setCondValues({ ...condValues, measurement_unit: e.target.value })}
-                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                  >
-                    <option value="sqft">SF (Square Feet)</option>
-                    <option value="lnft">LF (Linear Feet)</option>
-                    <option value="each">EA (Each)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Wind Zone</label>
-                  <select
-                    value={condValues.wind_zone}
-                    onChange={(e) => setCondValues({ ...condValues, wind_zone: e.target.value })}
-                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                  >
-                    <option value="1">Zone 1</option>
-                    <option value="2">Zone 2</option>
-                    <option value="3">Zone 3</option>
-                  </select>
-                </div>
-                {(condition.condition_type === 'wall_flashing' || condition.condition_type === 'parapet') && (
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Flashing Height (in)</label>
-                    <input
-                      type="number"
-                      step="1"
-                      value={condValues.flashing_height}
-                      onChange={(e) => setCondValues({ ...condValues, flashing_height: e.target.value })}
-                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                      placeholder="60"
-                    />
-                  </div>
-                )}
+                ))}
               </div>
-              <div className="mt-2">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
-                <input
-                  type="text"
-                  value={condValues.description}
-                  onChange={(e) => setCondValues({ ...condValues, description: e.target.value })}
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                />
-              </div>
-              <div className="flex justify-end gap-2 mt-3">
-                <button onClick={() => setEditingCondition(false)} className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded">
-                  Cancel
-                </button>
-                <button onClick={saveConditionEdit} className="px-3 py-1.5 text-xs text-white bg-primary-600 hover:bg-primary-700 rounded">
-                  Save Changes
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Materials Table */}
-          {materials.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 w-10">On</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Material</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-14">Unit</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-20">Coverage</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-16">Waste</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-24">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {materials.map((mat) => (
-                    <MaterialRow
-                      key={mat.id}
-                      material={mat}
-                      onUpdate={handleUpdateMaterial}
-                      onDelete={handleDeleteMaterial}
-                      onSwap={(m) => setSwapMaterial(m)}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="px-4 py-6 text-center text-sm text-gray-400">
-              No materials assigned. Click "Add Material" or run Smart Build to populate.
-            </div>
-          )}
-
-          {/* Add Material Button / Form */}
-          <div className="px-4 py-3 border-t border-gray-100">
-            {addingMaterial ? (
-              <form onSubmit={handleAddMaterial} className="space-y-3">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                  <div className="col-span-2 md:col-span-1">
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Category (select first)</label>
-                    <select
-                      value={newMat.material_category}
-                      onChange={(e) => setNewMat({ ...newMat, material_category: e.target.value, material_name: '', cost_database_item_id: null })}
-                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                    >
-                      <option value="membrane">Membrane</option>
-                      <option value="insulation">Insulation</option>
-                      <option value="fastener">Fastener</option>
-                      <option value="adhesive">Adhesive</option>
-                      <option value="flashing">Flashing</option>
-                      <option value="metal">Metal</option>
-                      <option value="sealant">Sealant</option>
-                      <option value="accessory">Accessory</option>
-                      <option value="misc">Misc</option>
-                    </select>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Material (from Cost Database) *</label>
-                    <CostDbSearchInput
-                      category={newMat.material_category}
-                      placeholder="Search materials..."
-                      onSelect={(item) => setNewMat({
-                        ...newMat,
-                        material_name: item.material_name,
-                        unit: item.unit,
-                        cost_database_item_id: item.id,
-                      })}
-                    />
-                    {newMat.material_name && (
-                      <div className="mt-1 text-xs text-green-700 flex items-center gap-1">
-                        ✓ {newMat.material_name}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Coverage Rate</label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      value={newMat.coverage_rate}
-                      onChange={(e) => setNewMat({ ...newMat, coverage_rate: e.target.value })}
-                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Waste Factor</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={newMat.waste_factor}
-                      onChange={(e) => setNewMat({ ...newMat, waste_factor: e.target.value })}
-                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Calc Type</label>
-                    <select
-                      value={newMat.calc_type}
-                      onChange={(e) => setNewMat({ ...newMat, calc_type: e.target.value })}
-                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                    >
-                      <option value="standard">Standard (meas x rate)</option>
-                      <option value="wall_membrane">Wall Membrane (length x height)</option>
-                      <option value="fastener">Fastener (length / spacing)</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <button type="button" onClick={() => setAddingMaterial(false)} className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded">
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={!newMat.material_name}
-                    className="px-3 py-1.5 text-xs text-white bg-primary-600 hover:bg-primary-700 rounded disabled:opacity-50"
-                  >
-                    Add Material
-                  </button>
-                </div>
-              </form>
             ) : (
-              <button
-                onClick={() => setAddingMaterial(true)}
-                className="inline-flex items-center text-xs text-primary-600 hover:text-primary-800 font-medium"
-              >
-                <PlusIcon className="w-3.5 h-3.5 mr-1" />
-                Add Material
-              </button>
-            )}
-          </div>
-
-          {/* Product Swap Modal */}
-          {swapMaterial && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-              <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-                <div className="px-4 py-3 border-b border-gray-200">
-                  <h3 className="text-sm font-semibold text-gray-800">Swap Product</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Replace <span className="font-medium">{swapMaterial.material_name}</span> with a different product
-                  </p>
-                </div>
-                <div className="p-4">
-                  <CostDbSearchInput
-                    category={swapMaterial.material_category}
-                    placeholder={`Search ${swapMaterial.material_category} products...`}
-                    onSelect={handleSwapProduct}
-                  />
-                </div>
-                <div className="px-4 py-3 border-t border-gray-100 flex justify-end">
-                  <button
-                    onClick={() => setSwapMaterial(null)}
-                    className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded"
-                  >
-                    Cancel
-                  </button>
-                </div>
+              <div className="text-center py-6 text-sm text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
+                No materials yet. Click "+ Add Material" below to pull from cost database.
               </div>
+            )}
+
+            {/* Add Material Section */}
+            <div className="mt-3">
+              {addingMaterial ? (
+                <div className="border border-primary-200 bg-primary-50/30 rounded-lg p-3">
+                  <div className="text-xs font-medium text-gray-700 mb-2">Search cost database to add a material:</div>
+                  <CostDbSearchInput
+                    category=""
+                    placeholder="Search by name, category, or manufacturer..."
+                    onSelect={handleAddFromCostDb}
+                  />
+                  <div className="flex justify-end mt-2">
+                    <button onClick={() => setAddingMaterial(false)} className="px-3 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setAddingMaterial(true)}
+                  className="inline-flex items-center px-3 py-2 text-xs font-medium text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-lg transition-colors"
+                >
+                  <PlusIcon className="w-3.5 h-3.5 mr-1.5" />
+                  Add Material
+                </button>
+              )}
             </div>
-          )}
+          </div>
         </div>
       )}
     </div>
@@ -723,7 +620,7 @@ function ConditionCard({ condition, onRefresh, onToggleActive, isSystemCondition
 
 
 // ============================================================================
-// PLAN ANALYSIS SECTION (simplified — kept from original)
+// PLAN ANALYSIS SECTION (compact, kept from original)
 // ============================================================================
 function PlanAnalysisSection({ projectId, onConditionsChanged }) {
   const [planFiles, setPlanFiles] = useState([])
@@ -754,7 +651,6 @@ function PlanAnalysisSection({ projectId, onConditionsChanged }) {
   useEffect(() => { fetchPlans() }, [fetchPlans])
   useEffect(() => { if (selectedPlan?.id) fetchExtractions(selectedPlan.id) }, [selectedPlan, fetchExtractions])
 
-  // Poll for analysis status
   useEffect(() => {
     if (!pollingId) return
     const interval = setInterval(async () => {
@@ -855,9 +751,7 @@ function PlanAnalysisSection({ projectId, onConditionsChanged }) {
           </div>
         )}
         {error && (
-          <div className="mt-3 bg-red-50 border border-red-200 rounded p-2 text-xs text-red-700">
-            {error}
-          </div>
+          <div className="mt-3 bg-red-50 border border-red-200 rounded p-2 text-xs text-red-700">{error}</div>
         )}
       </div>
     </div>
@@ -890,13 +784,11 @@ export default function ConditionsTab({ projectId }) {
         referenceAPI.conditionTypes().catch(() => ({ data: [] })),
         projectAPI.get(projectId).catch(() => ({ data: null })),
       ])
-      // Handle new response format: { conditions: [...], systems: [...] }
       const data = condRes.data
       if (data && data.conditions) {
         setConditions(data.conditions || [])
         setSystems(data.systems || [])
       } else {
-        // Backward compat: old format returns array directly
         setConditions(Array.isArray(data) ? data : [])
       }
       const types = typesRes.data?.condition_types || typesRes.data || []
@@ -960,19 +852,6 @@ export default function ConditionsTab({ projectId }) {
     }
   }
 
-  if (loading) return <LoadingSpinner />
-
-  // Separate active and inactive conditions
-  const activeConditions = conditions.filter(c => c.is_active !== false)
-  const inactiveConditions = conditions.filter(c => c.is_active === false)
-
-  // Summarize (active only)
-  const totalSF = activeConditions.reduce((s, c) => s + (c.measurement_unit === 'sqft' ? (c.measurement_value || 0) : 0), 0)
-  const totalLF = activeConditions.reduce((s, c) => s + (c.measurement_unit === 'lnft' ? (c.measurement_value || 0) : 0), 0)
-  const totalEA = activeConditions.reduce((s, c) => s + (c.measurement_unit === 'each' ? (c.measurement_value || 0) : 0), 0)
-  const totalMaterials = activeConditions.reduce((s, c) => s + (c.materials?.length || 0), 0)
-
-  // Toggle condition active/inactive
   const handleToggleConditionActive = async (conditionId, currentActive) => {
     try {
       await conditionAPI.update(conditionId, { is_active: !currentActive })
@@ -982,6 +861,16 @@ export default function ConditionsTab({ projectId }) {
     }
   }
 
+  if (loading) return <LoadingSpinner />
+
+  const activeConditions = conditions.filter(c => c.is_active !== false)
+  const inactiveConditions = conditions.filter(c => c.is_active === false)
+
+  const totalSF = activeConditions.reduce((s, c) => s + (c.measurement_unit === 'sqft' ? (c.measurement_value || 0) : 0), 0)
+  const totalLF = activeConditions.reduce((s, c) => s + (c.measurement_unit === 'lnft' ? (c.measurement_value || 0) : 0), 0)
+  const totalEA = activeConditions.reduce((s, c) => s + (c.measurement_unit === 'each' ? (c.measurement_value || 0) : 0), 0)
+  const totalMaterials = activeConditions.reduce((s, c) => s + (c.materials?.length || 0), 0)
+
   const currentSystem = systems.length > 0 ? systems[0] : null
 
   return (
@@ -990,7 +879,7 @@ export default function ConditionsTab({ projectId }) {
       <PlanAnalysisSection projectId={projectId} onConditionsChanged={fetchConditions} />
 
       {/* Smart Build Section */}
-      <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-5">
+      <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5">
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <h3 className="text-base font-semibold text-blue-900 flex items-center">
@@ -1085,77 +974,51 @@ export default function ConditionsTab({ projectId }) {
         )}
       </div>
 
-      {/* System Header */}
-      {currentSystem && (
-        <div className="mb-4 bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-primary-100 flex items-center justify-center">
-              <svg className="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
-            </div>
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">{currentSystem.name}</h2>
-              <div className="flex gap-2 items-center mt-0.5">
-                <span className="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-semibold rounded">
-                  {currentSystem.system_type}
-                </span>
-                <span className="text-xs text-gray-500">
-                  {activeConditions.length} active / {conditions.length} total conditions
-                </span>
-              </div>
-            </div>
+      {/* Conditions Header + Add Button */}
+      <div className="flex justify-between items-center mb-4">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">
+            {currentSystem ? currentSystem.name : 'Roof Conditions'}
+          </h2>
+          <div className="flex gap-3 text-xs text-gray-500 mt-1">
+            {currentSystem && (
+              <span className="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-semibold rounded">
+                {currentSystem.system_type}
+              </span>
+            )}
+            <span>{activeConditions.length} active conditions</span>
+            <span>{totalMaterials} materials</span>
+            {totalSF > 0 && <span>{totalSF.toLocaleString()} SF</span>}
+            {totalLF > 0 && <span>{totalLF.toLocaleString()} LF</span>}
+            {totalEA > 0 && <span>{totalEA.toLocaleString()} EA</span>}
           </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center px-3 py-2 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-700"
-          >
-            <PlusIcon className="w-4 h-4 mr-1" />
-            Add Condition
-          </button>
         </div>
-      )}
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="inline-flex items-center px-4 py-2.5 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 shadow-sm transition-colors"
+        >
+          <PlusIcon className="w-4 h-4 mr-1.5" />
+          Add Condition
+        </button>
+      </div>
 
-      {/* Conditions Header (when no system exists) */}
-      {!currentSystem && (
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Roof Conditions</h2>
-            <div className="flex gap-3 text-xs text-gray-500 mt-1">
-              <span>{activeConditions.length} active conditions</span>
-              <span>{totalMaterials} materials</span>
-              {totalSF > 0 && <span>{totalSF.toLocaleString()} SF</span>}
-              {totalLF > 0 && <span>{totalLF.toLocaleString()} LF</span>}
-              {totalEA > 0 && <span>{totalEA.toLocaleString()} EA</span>}
-            </div>
-          </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center px-3 py-2 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-700"
-          >
-            <PlusIcon className="w-4 h-4 mr-1" />
-            Add Condition
-          </button>
-        </div>
-      )}
-
-      {/* Summary Stats (active conditions) */}
+      {/* Summary Stats */}
       {activeConditions.length > 0 && (
         <div className="mb-4 grid grid-cols-4 gap-3">
-          <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
-            <div className="text-lg font-bold text-gray-900">{activeConditions.length}</div>
+          <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
+            <div className="text-xl font-bold text-gray-900">{activeConditions.length}</div>
             <div className="text-xs text-gray-500">Active</div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
-            <div className="text-lg font-bold text-blue-600">{totalSF > 0 ? totalSF.toLocaleString() : '—'}</div>
+          <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
+            <div className="text-xl font-bold text-blue-600">{totalSF > 0 ? totalSF.toLocaleString() : '—'}</div>
             <div className="text-xs text-gray-500">SF</div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
-            <div className="text-lg font-bold text-green-600">{totalLF > 0 ? totalLF.toLocaleString() : '—'}</div>
+          <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
+            <div className="text-xl font-bold text-green-600">{totalLF > 0 ? totalLF.toLocaleString() : '—'}</div>
             <div className="text-xs text-gray-500">LF</div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
-            <div className="text-lg font-bold text-amber-600">{totalEA > 0 ? totalEA.toLocaleString() : '—'}</div>
+          <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
+            <div className="text-xl font-bold text-amber-600">{totalEA > 0 ? totalEA.toLocaleString() : '—'}</div>
             <div className="text-xs text-gray-500">EA</div>
           </div>
         </div>
@@ -1170,12 +1033,19 @@ export default function ConditionsTab({ projectId }) {
 
       {/* Active Conditions */}
       {conditions.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+        <div className="text-center py-16 bg-white rounded-xl border-2 border-dashed border-gray-200">
           <svg className="mx-auto h-12 w-12 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
           </svg>
-          <p className="text-gray-500 mb-2">No conditions yet.</p>
-          <p className="text-sm text-gray-400">Upload plans and run Smart Build, or add conditions manually.</p>
+          <p className="text-gray-500 mb-2 font-medium">No conditions yet</p>
+          <p className="text-sm text-gray-400 mb-4">Upload plans and run Smart Build, or add conditions manually.</p>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="inline-flex items-center px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700"
+          >
+            <PlusIcon className="w-4 h-4 mr-1.5" />
+            Add Your First Condition
+          </button>
         </div>
       ) : (
         <>
@@ -1207,21 +1077,20 @@ export default function ConditionsTab({ projectId }) {
               {showInactive && (
                 <div className="space-y-2">
                   {inactiveConditions.map((c) => {
-                    const ct_info = { label: c.condition_label || c.condition_type }
-                    const colors = TYPE_COLORS[c.condition_type] || TYPE_COLORS.custom
+                    const clr = getColors(c.condition_type)
                     return (
                       <div
                         key={c.id}
                         className="border border-gray-200 rounded-lg bg-gray-50 px-4 py-3 flex items-center justify-between opacity-60 hover:opacity-80 transition-opacity"
                       >
                         <div className="flex items-center gap-3">
-                          <span className={`inline-flex items-center px-2 py-0.5 ${colors.bg} ${colors.text} text-xs font-semibold rounded`}>
-                            {ct_info.label}
+                          <span className={`inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded ${clr.badge}`}>
+                            {TYPE_LABELS[c.condition_type] || c.condition_type}
                           </span>
                           <span className="text-sm text-gray-500">
                             {fmtNum(c.measurement_value)} {fmtUnit(c.measurement_unit)}
                           </span>
-                          <span className="text-xs text-gray-400 italic">No plan data</span>
+                          <span className="text-xs text-gray-400 italic">Inactive</span>
                         </div>
                         <button
                           onClick={() => handleToggleConditionActive(c.id, false)}
@@ -1249,7 +1118,6 @@ export default function ConditionsTab({ projectId }) {
               value={newCondition.condition_type}
               onChange={(e) => {
                 const val = e.target.value
-                // Auto-set unit based on type
                 const typeObj = conditionTypes.find(t => (t.value || t) === val)
                 const defaultUnit = typeObj?.default_unit || 'sqft'
                 setNewCondition({ ...newCondition, condition_type: val, measurement_unit: defaultUnit })
@@ -1262,16 +1130,17 @@ export default function ConditionsTab({ projectId }) {
                 const label = t.label || t
                 return <option key={val} value={val}>{label}</option>
               })}
+              <option value="custom">Custom</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Description</label>
+            <label className="block text-sm font-medium text-gray-700">Description / Label</label>
             <input
               type="text"
               value={newCondition.description}
               onChange={(e) => setNewCondition({ ...newCondition, description: e.target.value })}
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
-              placeholder="e.g., Main roof field area"
+              placeholder="e.g., Main roof field area, North wall flashing"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -1284,7 +1153,7 @@ export default function ConditionsTab({ projectId }) {
                 value={newCondition.measurement_value}
                 onChange={(e) => setNewCondition({ ...newCondition, measurement_value: e.target.value })}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
-                placeholder="e.g., 5000"
+                placeholder="e.g., 7680"
               />
             </div>
             <div>
@@ -1316,7 +1185,7 @@ export default function ConditionsTab({ projectId }) {
             <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">
               Cancel
             </button>
-            <button type="submit" className="px-4 py-2 text-sm text-white bg-primary-600 hover:bg-primary-700 rounded-lg">
+            <button type="submit" className="px-4 py-2 text-sm text-white bg-primary-600 hover:bg-primary-700 rounded-lg shadow-sm">
               Add Condition
             </button>
           </div>
