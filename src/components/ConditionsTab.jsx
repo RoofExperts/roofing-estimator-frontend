@@ -193,14 +193,10 @@ function MaterialRow({ material, onUpdate, onDelete, onSwap }) {
     await onUpdate(material.id, { is_included: !material.is_included })
   }
 
-  const qtyCalc = material.qty_calculated
-  const unitCost = material.unit_cost
-  const extCost = material.extended_cost
-
   return (
     <tr className={`text-sm ${!material.is_included ? 'opacity-50 bg-gray-50' : 'hover:bg-gray-50'}`}>
       {/* Toggle */}
-      <td className="px-2 py-2 text-center">
+      <td className="px-3 py-2 text-center">
         <input
           type="checkbox"
           checked={material.is_included}
@@ -209,58 +205,42 @@ function MaterialRow({ material, onUpdate, onDelete, onSwap }) {
         />
       </td>
       {/* Material Name + Category */}
-      <td className="px-2 py-2">
-        <div className="font-medium text-gray-900 text-xs">{material.material_name}</div>
-        <div className="text-[10px] text-gray-400">{material.material_category}</div>
+      <td className="px-3 py-2">
+        <div className="font-medium text-gray-900">{material.material_name}</div>
+        <div className="text-xs text-gray-400">{material.material_category}</div>
       </td>
       {/* Unit */}
-      <td className="px-2 py-2 text-gray-600 text-xs">{fmtUnit(material.unit)}</td>
+      <td className="px-3 py-2 text-gray-600">{fmtUnit(material.unit)}</td>
       {/* Coverage Rate */}
-      <td className="px-2 py-2">
+      <td className="px-3 py-2">
         {editing ? (
           <input
             type="number"
             step="0.001"
             value={values.coverage_rate}
             onChange={(e) => setValues({ ...values, coverage_rate: e.target.value })}
-            className="w-16 px-1 py-0.5 border border-gray-300 rounded text-xs"
+            className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
           />
         ) : (
-          <span className="font-mono text-gray-700 text-xs">{material.coverage_rate}</span>
+          <span className="font-mono text-gray-700">{material.coverage_rate}</span>
         )}
       </td>
       {/* Waste % */}
-      <td className="px-2 py-2">
+      <td className="px-3 py-2">
         {editing ? (
           <input
             type="number"
             step="0.01"
             value={values.waste_factor}
             onChange={(e) => setValues({ ...values, waste_factor: e.target.value })}
-            className="w-14 px-1 py-0.5 border border-gray-300 rounded text-xs"
+            className="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
           />
         ) : (
-          <span className="font-mono text-gray-700 text-xs">{(material.waste_factor * 100).toFixed(0)}%</span>
+          <span className="font-mono text-gray-700">{(material.waste_factor * 100).toFixed(0)}%</span>
         )}
       </td>
-      {/* Qty Calc */}
-      <td className="px-2 py-2 text-right">
-        <span className="font-mono text-gray-700 text-xs">{fmtNum(qtyCalc)}</span>
-      </td>
-      {/* Unit Cost */}
-      <td className="px-2 py-2 text-right">
-        <span className={`font-mono text-xs ${unitCost > 0 ? 'text-gray-700' : 'text-red-400'}`}>
-          {unitCost > 0 ? fmtMoney(unitCost) : 'N/A'}
-        </span>
-      </td>
-      {/* Extended Cost */}
-      <td className="px-2 py-2 text-right">
-        <span className={`font-mono text-xs font-semibold ${extCost > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
-          {material.is_included ? fmtMoney(extCost) : '—'}
-        </span>
-      </td>
       {/* Override Qty */}
-      <td className="px-2 py-2">
+      <td className="px-3 py-2">
         {editing ? (
           <input
             type="number"
@@ -268,38 +248,52 @@ function MaterialRow({ material, onUpdate, onDelete, onSwap }) {
             value={values.override_quantity}
             onChange={(e) => setValues({ ...values, override_quantity: e.target.value })}
             placeholder="Auto"
-            className="w-16 px-1 py-0.5 border border-gray-300 rounded text-xs"
+            className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
           />
         ) : (
-          <span className={`font-mono text-xs ${material.override_quantity != null ? 'text-amber-700 font-semibold' : 'text-gray-400'}`}>
-            {material.override_quantity != null ? fmtNum(material.override_quantity) : '—'}
+          <span className={`font-mono ${material.override_quantity != null ? 'text-amber-700 font-semibold' : 'text-gray-400'}`}>
+            {material.override_quantity != null ? fmtNum(material.override_quantity) : 'Auto'}
           </span>
         )}
       </td>
-      {/* Actions */}
-      <td className="px-2 py-2 text-right whitespace-nowrap">
+      {/* Notes */}
+      <td className="px-3 py-2 max-w-[120px]">
         {editing ? (
-          <div className="flex items-center justify-end gap-1">
+          <input
+            type="text"
+            value={values.notes}
+            onChange={(e) => setValues({ ...values, notes: e.target.value })}
+            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+            placeholder="Notes..."
+          />
+        ) : (
+          <span className="text-xs text-gray-500 truncate block">{material.notes || '—'}</span>
+        )}
+      </td>
+      {/* Actions */}
+      <td className="px-3 py-2 text-right whitespace-nowrap">
+        {editing ? (
+          <div className="flex items-center justify-end gap-2">
             <button
               onClick={save}
               disabled={saving}
               className="text-xs text-green-700 hover:text-green-900 font-medium"
             >
-              {saving ? '...' : 'Save'}
+              {saving ? 'Saving...' : 'Save'}
             </button>
             <button
               onClick={() => setEditing(false)}
               className="text-xs text-gray-500 hover:text-gray-700"
             >
-              ✕
+              Cancel
             </button>
           </div>
         ) : (
-          <div className="flex items-center justify-end gap-1">
+          <div className="flex items-center justify-end gap-2">
             <button
               onClick={() => onSwap(material)}
               className="text-xs text-indigo-500 hover:text-indigo-700"
-              title="Swap product"
+              title="Swap product from cost database"
             >
               <SwapIcon className="w-3.5 h-3.5" />
             </button>
@@ -340,7 +334,6 @@ function ConditionCard({ condition, onRefresh }) {
 
   const materials = condition.materials || []
   const includedCount = materials.filter(m => m.is_included).length
-  const conditionTotal = materials.reduce((sum, m) => sum + (m.is_included ? (m.extended_cost || 0) : 0), 0)
   const colors = TYPE_COLORS[condition.condition_type] || TYPE_COLORS.custom
 
   const handleUpdateMaterial = async (materialId, data) => {
@@ -460,11 +453,6 @@ function ConditionCard({ condition, onRefresh }) {
           <span className="bg-white/70 px-2 py-0.5 rounded">
             {includedCount}/{materials.length} materials
           </span>
-          {conditionTotal > 0 && (
-            <span className="bg-white/70 px-2 py-0.5 rounded font-semibold">
-              {fmtMoney(conditionTotal)}
-            </span>
-          )}
           <button
             onClick={startConditionEdit}
             className="text-xs hover:underline opacity-70 hover:opacity-100"
@@ -568,16 +556,14 @@ function ConditionCard({ condition, onRefresh }) {
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-2 py-2 text-center text-[10px] font-medium text-gray-500 w-8">On</th>
-                    <th className="px-2 py-2 text-left text-[10px] font-medium text-gray-500">Material</th>
-                    <th className="px-2 py-2 text-left text-[10px] font-medium text-gray-500 w-10">Unit</th>
-                    <th className="px-2 py-2 text-left text-[10px] font-medium text-gray-500 w-16">Coverage</th>
-                    <th className="px-2 py-2 text-left text-[10px] font-medium text-gray-500 w-12">Waste</th>
-                    <th className="px-2 py-2 text-right text-[10px] font-medium text-gray-500 w-16">Qty</th>
-                    <th className="px-2 py-2 text-right text-[10px] font-medium text-gray-500 w-16">Unit $</th>
-                    <th className="px-2 py-2 text-right text-[10px] font-medium text-gray-500 w-20">Ext Cost</th>
-                    <th className="px-2 py-2 text-left text-[10px] font-medium text-gray-500 w-16">Override</th>
-                    <th className="px-2 py-2 text-right text-[10px] font-medium text-gray-500 w-20">Actions</th>
+                    <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 w-10">On</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Material</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-14">Unit</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-20">Coverage</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-16">Waste</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-20">Override</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Notes</th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-24">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
