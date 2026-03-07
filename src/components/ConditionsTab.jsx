@@ -37,11 +37,103 @@ const BoltIcon = ({ className = 'w-5 h-5' }) => (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
   </svg>
 )
+const SwapIcon = ({ className = 'w-4 h-4' }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+  </svg>
+)
+const SearchIcon = ({ className = 'w-4 h-4' }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+  </svg>
+)
 
 // Unit display helpers
 const UNIT_LABELS = { sqft: 'SF', lnft: 'LF', each: 'EA' }
 const fmtUnit = (u) => UNIT_LABELS[u] || u
 const fmtNum = (v) => v != null ? Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'
+const fmtMoney = (v) => v != null ? '$' + Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
+
+// ============================================================================
+// COST DATABASE SEARCH INPUT — dropdown that searches the cost DB
+// ============================================================================
+function CostDbSearchInput({ category, onSelect, placeholder = 'Search materials...' }) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState([])
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const timerRef = { current: null }
+
+  const doSearch = async (q) => {
+    setLoading(true)
+    try {
+      const res = await conditionAPI.searchCostDatabase(q, category || '')
+      setResults(res.data || [])
+    } catch { setResults([]) }
+    finally { setLoading(false) }
+  }
+
+  const handleChange = (e) => {
+    const val = e.target.value
+    setQuery(val)
+    setOpen(true)
+    clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => doSearch(val), 250)
+  }
+
+  const handleFocus = () => {
+    setOpen(true)
+    if (results.length === 0) doSearch(query)
+  }
+
+  const handleSelect = (item) => {
+    setQuery(item.material_name)
+    setOpen(false)
+    onSelect(item)
+  }
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <SearchIcon className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          value={query}
+          onChange={handleChange}
+          onFocus={handleFocus}
+          onBlur={() => setTimeout(() => setOpen(false), 200)}
+          className="w-full pl-7 pr-2 py-1.5 border border-gray-300 rounded text-sm"
+          placeholder={placeholder}
+        />
+      </div>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg">
+          {loading && <div className="px-3 py-2 text-xs text-gray-400">Searching...</div>}
+          {!loading && results.length === 0 && (
+            <div className="px-3 py-2 text-xs text-gray-400">No matches found</div>
+          )}
+          {results.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => handleSelect(item)}
+              className="w-full text-left px-3 py-2 hover:bg-primary-50 border-b border-gray-50 last:border-0"
+            >
+              <div className="text-sm font-medium text-gray-900">{item.material_name}</div>
+              <div className="text-xs text-gray-500 flex gap-3">
+                {item.manufacturer && <span>{item.manufacturer}</span>}
+                <span>{fmtUnit(item.unit)}</span>
+                <span>{fmtMoney(item.unit_cost)}/{item.unit}</span>
+                {item.product_name && <span className="text-gray-400">{item.product_name}</span>}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // Condition type colors for the accordion headers
 const TYPE_COLORS = {
@@ -65,7 +157,7 @@ const TYPE_COLORS = {
 // ============================================================================
 // MATERIAL ROW — Inline editable row inside a condition accordion
 // ============================================================================
-function MaterialRow({ material, onUpdate, onDelete }) {
+function MaterialRow({ material, onUpdate, onDelete, onSwap }) {
   const [editing, setEditing] = useState(false)
   const [values, setValues] = useState({})
   const [saving, setSaving] = useState(false)
@@ -101,10 +193,14 @@ function MaterialRow({ material, onUpdate, onDelete }) {
     await onUpdate(material.id, { is_included: !material.is_included })
   }
 
+  const qtyCalc = material.qty_calculated
+  const unitCost = material.unit_cost
+  const extCost = material.extended_cost
+
   return (
     <tr className={`text-sm ${!material.is_included ? 'opacity-50 bg-gray-50' : 'hover:bg-gray-50'}`}>
       {/* Toggle */}
-      <td className="px-3 py-2 text-center">
+      <td className="px-2 py-2 text-center">
         <input
           type="checkbox"
           checked={material.is_included}
@@ -113,42 +209,58 @@ function MaterialRow({ material, onUpdate, onDelete }) {
         />
       </td>
       {/* Material Name + Category */}
-      <td className="px-3 py-2">
-        <div className="font-medium text-gray-900">{material.material_name}</div>
-        <div className="text-xs text-gray-400">{material.material_category}</div>
+      <td className="px-2 py-2">
+        <div className="font-medium text-gray-900 text-xs">{material.material_name}</div>
+        <div className="text-[10px] text-gray-400">{material.material_category}</div>
       </td>
       {/* Unit */}
-      <td className="px-3 py-2 text-gray-600">{fmtUnit(material.unit)}</td>
+      <td className="px-2 py-2 text-gray-600 text-xs">{fmtUnit(material.unit)}</td>
       {/* Coverage Rate */}
-      <td className="px-3 py-2">
+      <td className="px-2 py-2">
         {editing ? (
           <input
             type="number"
             step="0.001"
             value={values.coverage_rate}
             onChange={(e) => setValues({ ...values, coverage_rate: e.target.value })}
-            className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+            className="w-16 px-1 py-0.5 border border-gray-300 rounded text-xs"
           />
         ) : (
-          <span className="font-mono text-gray-700">{material.coverage_rate}</span>
+          <span className="font-mono text-gray-700 text-xs">{material.coverage_rate}</span>
         )}
       </td>
       {/* Waste % */}
-      <td className="px-3 py-2">
+      <td className="px-2 py-2">
         {editing ? (
           <input
             type="number"
             step="0.01"
             value={values.waste_factor}
             onChange={(e) => setValues({ ...values, waste_factor: e.target.value })}
-            className="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
+            className="w-14 px-1 py-0.5 border border-gray-300 rounded text-xs"
           />
         ) : (
-          <span className="font-mono text-gray-700">{(material.waste_factor * 100).toFixed(0)}%</span>
+          <span className="font-mono text-gray-700 text-xs">{(material.waste_factor * 100).toFixed(0)}%</span>
         )}
       </td>
+      {/* Qty Calc */}
+      <td className="px-2 py-2 text-right">
+        <span className="font-mono text-gray-700 text-xs">{fmtNum(qtyCalc)}</span>
+      </td>
+      {/* Unit Cost */}
+      <td className="px-2 py-2 text-right">
+        <span className={`font-mono text-xs ${unitCost > 0 ? 'text-gray-700' : 'text-red-400'}`}>
+          {unitCost > 0 ? fmtMoney(unitCost) : 'N/A'}
+        </span>
+      </td>
+      {/* Extended Cost */}
+      <td className="px-2 py-2 text-right">
+        <span className={`font-mono text-xs font-semibold ${extCost > 0 ? 'text-gray-900' : 'text-gray-400'}`}>
+          {material.is_included ? fmtMoney(extCost) : '—'}
+        </span>
+      </td>
       {/* Override Qty */}
-      <td className="px-3 py-2">
+      <td className="px-2 py-2">
         {editing ? (
           <input
             type="number"
@@ -156,48 +268,41 @@ function MaterialRow({ material, onUpdate, onDelete }) {
             value={values.override_quantity}
             onChange={(e) => setValues({ ...values, override_quantity: e.target.value })}
             placeholder="Auto"
-            className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+            className="w-16 px-1 py-0.5 border border-gray-300 rounded text-xs"
           />
         ) : (
-          <span className={`font-mono ${material.override_quantity != null ? 'text-amber-700 font-semibold' : 'text-gray-400'}`}>
-            {material.override_quantity != null ? fmtNum(material.override_quantity) : 'Auto'}
+          <span className={`font-mono text-xs ${material.override_quantity != null ? 'text-amber-700 font-semibold' : 'text-gray-400'}`}>
+            {material.override_quantity != null ? fmtNum(material.override_quantity) : '—'}
           </span>
         )}
       </td>
-      {/* Notes */}
-      <td className="px-3 py-2 max-w-[120px]">
-        {editing ? (
-          <input
-            type="text"
-            value={values.notes}
-            onChange={(e) => setValues({ ...values, notes: e.target.value })}
-            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-            placeholder="Notes..."
-          />
-        ) : (
-          <span className="text-xs text-gray-500 truncate block">{material.notes || '—'}</span>
-        )}
-      </td>
       {/* Actions */}
-      <td className="px-3 py-2 text-right whitespace-nowrap">
+      <td className="px-2 py-2 text-right whitespace-nowrap">
         {editing ? (
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-end gap-1">
             <button
               onClick={save}
               disabled={saving}
               className="text-xs text-green-700 hover:text-green-900 font-medium"
             >
-              {saving ? 'Saving...' : 'Save'}
+              {saving ? '...' : 'Save'}
             </button>
             <button
               onClick={() => setEditing(false)}
               className="text-xs text-gray-500 hover:text-gray-700"
             >
-              Cancel
+              ✕
             </button>
           </div>
         ) : (
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-end gap-1">
+            <button
+              onClick={() => onSwap(material)}
+              className="text-xs text-indigo-500 hover:text-indigo-700"
+              title="Swap product"
+            >
+              <SwapIcon className="w-3.5 h-3.5" />
+            </button>
             <button
               onClick={startEdit}
               className="text-xs text-primary-600 hover:text-primary-800"
@@ -228,11 +333,14 @@ function ConditionCard({ condition, onRefresh }) {
   const [newMat, setNewMat] = useState({
     material_name: '', material_category: 'membrane', unit: 'sqft',
     coverage_rate: 1, waste_factor: 0.1, calc_type: 'standard',
+    cost_database_item_id: null,
   })
+  const [swapMaterial, setSwapMaterial] = useState(null) // material being swapped
   const [error, setError] = useState('')
 
   const materials = condition.materials || []
   const includedCount = materials.filter(m => m.is_included).length
+  const conditionTotal = materials.reduce((sum, m) => sum + (m.is_included ? (m.extended_cost || 0) : 0), 0)
   const colors = TYPE_COLORS[condition.condition_type] || TYPE_COLORS.custom
 
   const handleUpdateMaterial = async (materialId, data) => {
@@ -261,12 +369,27 @@ function ConditionCard({ condition, onRefresh }) {
         ...newMat,
         coverage_rate: parseFloat(newMat.coverage_rate),
         waste_factor: parseFloat(newMat.waste_factor),
+        cost_database_item_id: newMat.cost_database_item_id,
       })
       setAddingMaterial(false)
-      setNewMat({ material_name: '', material_category: 'membrane', unit: 'sqft', coverage_rate: 1, waste_factor: 0.1, calc_type: 'standard' })
+      setNewMat({ material_name: '', material_category: 'membrane', unit: 'sqft', coverage_rate: 1, waste_factor: 0.1, calc_type: 'standard', cost_database_item_id: null })
       onRefresh()
     } catch (err) {
       setError('Failed to add material')
+    }
+  }
+
+  const handleSwapProduct = async (costItem) => {
+    if (!swapMaterial) return
+    try {
+      await conditionAPI.updateMaterial(swapMaterial.id, {
+        material_name: costItem.material_name,
+        cost_database_item_id: costItem.id,
+      })
+      setSwapMaterial(null)
+      onRefresh()
+    } catch (err) {
+      setError('Failed to swap product')
     }
   }
 
@@ -337,6 +460,11 @@ function ConditionCard({ condition, onRefresh }) {
           <span className="bg-white/70 px-2 py-0.5 rounded">
             {includedCount}/{materials.length} materials
           </span>
+          {conditionTotal > 0 && (
+            <span className="bg-white/70 px-2 py-0.5 rounded font-semibold">
+              {fmtMoney(conditionTotal)}
+            </span>
+          )}
           <button
             onClick={startConditionEdit}
             className="text-xs hover:underline opacity-70 hover:opacity-100"
@@ -440,14 +568,16 @@ function ConditionCard({ condition, onRefresh }) {
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 w-10">On</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Material</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-14">Unit</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-20">Coverage</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-16">Waste</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-20">Override</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Notes</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-24">Actions</th>
+                    <th className="px-2 py-2 text-center text-[10px] font-medium text-gray-500 w-8">On</th>
+                    <th className="px-2 py-2 text-left text-[10px] font-medium text-gray-500">Material</th>
+                    <th className="px-2 py-2 text-left text-[10px] font-medium text-gray-500 w-10">Unit</th>
+                    <th className="px-2 py-2 text-left text-[10px] font-medium text-gray-500 w-16">Coverage</th>
+                    <th className="px-2 py-2 text-left text-[10px] font-medium text-gray-500 w-12">Waste</th>
+                    <th className="px-2 py-2 text-right text-[10px] font-medium text-gray-500 w-16">Qty</th>
+                    <th className="px-2 py-2 text-right text-[10px] font-medium text-gray-500 w-16">Unit $</th>
+                    <th className="px-2 py-2 text-right text-[10px] font-medium text-gray-500 w-20">Ext Cost</th>
+                    <th className="px-2 py-2 text-left text-[10px] font-medium text-gray-500 w-16">Override</th>
+                    <th className="px-2 py-2 text-right text-[10px] font-medium text-gray-500 w-20">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -457,6 +587,7 @@ function ConditionCard({ condition, onRefresh }) {
                       material={mat}
                       onUpdate={handleUpdateMaterial}
                       onDelete={handleDeleteMaterial}
+                      onSwap={(m) => setSwapMaterial(m)}
                     />
                   ))}
                 </tbody>
@@ -473,22 +604,11 @@ function ConditionCard({ condition, onRefresh }) {
             {addingMaterial ? (
               <form onSubmit={handleAddMaterial} className="space-y-3">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Material Name *</label>
-                    <input
-                      type="text"
-                      required
-                      value={newMat.material_name}
-                      onChange={(e) => setNewMat({ ...newMat, material_name: e.target.value })}
-                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                      placeholder="e.g., TPO Membrane 60mil"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
+                  <div className="col-span-2 md:col-span-1">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Category (select first)</label>
                     <select
                       value={newMat.material_category}
-                      onChange={(e) => setNewMat({ ...newMat, material_category: e.target.value })}
+                      onChange={(e) => setNewMat({ ...newMat, material_category: e.target.value, material_name: '', cost_database_item_id: null })}
                       className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
                     >
                       <option value="membrane">Membrane</option>
@@ -502,23 +622,23 @@ function ConditionCard({ condition, onRefresh }) {
                       <option value="misc">Misc</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Unit</label>
-                    <select
-                      value={newMat.unit}
-                      onChange={(e) => setNewMat({ ...newMat, unit: e.target.value })}
-                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                    >
-                      <option value="sqft">SF</option>
-                      <option value="lnft">LF</option>
-                      <option value="each">EA</option>
-                      <option value="roll">Roll</option>
-                      <option value="tube">Tube</option>
-                      <option value="pail">Pail</option>
-                      <option value="box">Box</option>
-                      <option value="bag">Bag</option>
-                      <option value="bdft">BdFt</option>
-                    </select>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Material (from Cost Database) *</label>
+                    <CostDbSearchInput
+                      category={newMat.material_category}
+                      placeholder="Search materials..."
+                      onSelect={(item) => setNewMat({
+                        ...newMat,
+                        material_name: item.material_name,
+                        unit: item.unit,
+                        cost_database_item_id: item.id,
+                      })}
+                    />
+                    {newMat.material_name && (
+                      <div className="mt-1 text-xs text-green-700 flex items-center gap-1">
+                        ✓ {newMat.material_name}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Coverage Rate</label>
@@ -557,7 +677,11 @@ function ConditionCard({ condition, onRefresh }) {
                   <button type="button" onClick={() => setAddingMaterial(false)} className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded">
                     Cancel
                   </button>
-                  <button type="submit" className="px-3 py-1.5 text-xs text-white bg-primary-600 hover:bg-primary-700 rounded">
+                  <button
+                    type="submit"
+                    disabled={!newMat.material_name}
+                    className="px-3 py-1.5 text-xs text-white bg-primary-600 hover:bg-primary-700 rounded disabled:opacity-50"
+                  >
                     Add Material
                   </button>
                 </div>
@@ -572,6 +696,35 @@ function ConditionCard({ condition, onRefresh }) {
               </button>
             )}
           </div>
+
+          {/* Product Swap Modal */}
+          {swapMaterial && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+              <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+                <div className="px-4 py-3 border-b border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-800">Swap Product</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Replace <span className="font-medium">{swapMaterial.material_name}</span> with a different product
+                  </p>
+                </div>
+                <div className="p-4">
+                  <CostDbSearchInput
+                    category={swapMaterial.material_category}
+                    placeholder={`Search ${swapMaterial.material_category} products...`}
+                    onSelect={handleSwapProduct}
+                  />
+                </div>
+                <div className="px-4 py-3 border-t border-gray-100 flex justify-end">
+                  <button
+                    onClick={() => setSwapMaterial(null)}
+                    className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

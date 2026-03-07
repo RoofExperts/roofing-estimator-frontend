@@ -84,6 +84,12 @@ export const conditionAPI = {
   addMaterial: (conditionId, data) => api.post(`/api/v1/conditions/${conditionId}/materials`, data),
   updateMaterial: (materialId, data) => api.put(`/api/v1/condition-materials/${materialId}`, data),
   deleteMaterial: (materialId) => api.delete(`/api/v1/condition-materials/${materialId}`),
+  searchCostDatabase: (q = '', category = '') => {
+    const params = new URLSearchParams()
+    if (q) params.append('q', q)
+    if (category) params.append('category', category)
+    return api.get(`/api/v1/cost-database/search?${params.toString()}`)
+  },
 }
 
 // ============= VISION / PLANS =============
