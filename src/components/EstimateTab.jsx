@@ -118,13 +118,22 @@ function ProjectSummaryPage({ summary, estimate }) {
     { label: 'Roof Area:', value: summary.roof_area_sf ? `${fmtNum(summary.roof_area_sf)} SF (${fmtNum(summary.roof_area_sq)} SQ)` : '—' },
   ]
 
+  const calcExtCost = (m) => {
+    const hasPU = m.purchase_unit && m.units_per_purchase
+    const pQty = m.purchase_qty || Math.ceil(m.total_qty)
+    const perUnit = hasPU
+      ? (m.units_per_purchase * (m.unit_cost + (m.labor_cost || 0)))
+      : (m.unit_cost + (m.labor_cost || 0))
+    return perUnit * pQty
+  }
+
   const flatTotal = estimate?.consolidated_materials
     ?.filter(m => !isMetalItem(m))
-    .reduce((s, m) => s + (m.total_cost || 0), 0) || 0
+    .reduce((s, m) => s + calcExtCost(m), 0) || 0
 
   const metalTotal = estimate?.consolidated_materials
     ?.filter(m => isMetalItem(m))
-    .reduce((s, m) => s + (m.total_cost || 0), 0) || 0
+    .reduce((s, m) => s + calcExtCost(m), 0) || 0
 
   const laborTotal = summary.labor_total || 0
   const subtotal = flatTotal + metalTotal + laborTotal
@@ -244,7 +253,14 @@ function FlatRoofMaterialsPage({ materials, onUpdateMaterial }) {
   })
 
   const { sections, sectionOrder } = groupIntoSections(flatMats)
-  const pageTotal = flatMats.reduce((s, m) => s + (m.purchase_cost || m.total_cost || 0), 0)
+  const pageTotal = flatMats.reduce((s, m) => {
+    const hasPU = m.purchase_unit && m.units_per_purchase
+    const pQty = m.purchase_qty || Math.ceil(m.total_qty)
+    const perUnit = hasPU
+      ? (m.units_per_purchase * (m.unit_cost + (m.labor_cost || 0)))
+      : (m.unit_cost + (m.labor_cost || 0))
+    return s + (perUnit * pQty)
+  }, 0)
 
   let lineNum = 0
 
@@ -298,7 +314,7 @@ function FlatRoofMaterialsPage({ materials, onUpdateMaterial }) {
                   const perUnitCost = hasPurchaseUnit
                     ? (mat.units_per_purchase * (mat.unit_cost + (mat.labor_cost || 0)))
                     : (mat.unit_cost + (mat.labor_cost || 0))
-                  const extCost = mat.purchase_cost || mat.total_cost
+                  const extCost = perUnitCost * purchaseQty
                   const wastePct = mat.waste_pct || 0
 
                   // Find the original index in the full materials array for callbacks
@@ -332,8 +348,14 @@ function FlatRoofMaterialsPage({ materials, onUpdateMaterial }) {
                       <td className="px-3 py-2.5 text-center text-gray-600">{displayUnit}</td>
                       <td className="px-3 py-2.5 text-right">
                         <EditableCell
-                          value={parseFloat((mat.unit_cost || 0).toFixed(2))}
-                          onSave={(v) => onUpdateMaterial(matKey, 'unit_cost', v)}
+                          value={parseFloat(perUnitCost.toFixed(2))}
+                          onSave={(v) => {
+                            // Convert per-purchase-unit cost back to per-base-unit cost
+                            const baseCost = hasPurchaseUnit
+                              ? (v / mat.units_per_purchase) - (mat.labor_cost || 0)
+                              : v - (mat.labor_cost || 0)
+                            onUpdateMaterial(matKey, 'unit_cost', Math.max(0, baseCost))
+                          }}
                           prefix="$"
                           className="font-mono text-gray-700"
                         />
@@ -381,7 +403,14 @@ function RoofMetalsPage({ materials, onUpdateMaterial }) {
     )
   }
 
-  const pageTotal = metals.reduce((s, m) => s + (m.purchase_cost || m.total_cost || 0), 0)
+  const pageTotal = metals.reduce((s, m) => {
+    const hasPU = m.purchase_unit && m.units_per_purchase
+    const pQty = m.purchase_qty || Math.ceil(m.total_qty)
+    const perUnit = hasPU
+      ? (m.units_per_purchase * (m.unit_cost + (m.labor_cost || 0)))
+      : (m.unit_cost + (m.labor_cost || 0))
+    return s + (perUnit * pQty)
+  }, 0)
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -411,7 +440,7 @@ function RoofMetalsPage({ materials, onUpdateMaterial }) {
               const perUnitCost = hasPurchaseUnit
                 ? (mat.units_per_purchase * (mat.unit_cost + (mat.labor_cost || 0)))
                 : (mat.unit_cost + (mat.labor_cost || 0))
-              const extCost = mat.purchase_cost || mat.total_cost
+              const extCost = perUnitCost * purchaseQty
               const wastePct = mat.waste_pct || 0
               const matKey = mat._idx
 
@@ -438,8 +467,13 @@ function RoofMetalsPage({ materials, onUpdateMaterial }) {
                   <td className="px-4 py-2.5 text-center text-gray-600">{displayUnit}</td>
                   <td className="px-4 py-2.5 text-right">
                     <EditableCell
-                      value={parseFloat((mat.unit_cost || 0).toFixed(2))}
-                      onSave={(v) => onUpdateMaterial(matKey, 'unit_cost', v)}
+                      value={parseFloat(perUnitCost.toFixed(2))}
+                      onSave={(v) => {
+                        const baseCost = hasPurchaseUnit
+                          ? (v / mat.units_per_purchase) - (mat.labor_cost || 0)
+                          : v - (mat.labor_cost || 0)
+                        onUpdateMaterial(matKey, 'unit_cost', Math.max(0, baseCost))
+                      }}
                       prefix="$"
                       className="font-mono text-gray-700"
                     />
