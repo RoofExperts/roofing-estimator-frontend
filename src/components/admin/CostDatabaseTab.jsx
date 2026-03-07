@@ -203,6 +203,8 @@ export default function CostDatabaseTab() {
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [sortField, setSortField] = useState('material_name')
   const [sortDir, setSortDir] = useState('asc')
+  const [dedupResult, setDedupResult] = useState(null)
+  const [dedupRunning, setDedupRunning] = useState(false)
 
   const loadItems = async () => {
     setLoading(true)
@@ -277,6 +279,36 @@ export default function CostDatabaseTab() {
     } catch (err) {
       console.error('Delete failed:', err)
       showMsg('Failed to delete item', 'error')
+    }
+  }
+
+  const handleDedupScan = async () => {
+    setDedupRunning(true)
+    try {
+      const res = await costDatabaseAPI.dedup(true) // dry_run = true
+      setDedupResult(res.data)
+      if (res.data.duplicate_groups === 0) {
+        showMsg('No duplicates found — your database is clean!', 'success')
+      }
+    } catch (err) {
+      showMsg('Failed to scan for duplicates: ' + (err.response?.data?.detail || err.message), 'error')
+    } finally {
+      setDedupRunning(false)
+    }
+  }
+
+  const handleDedupMerge = async () => {
+    if (!window.confirm(`This will merge ${dedupResult?.total_duplicates || 0} duplicate items and keep the best version of each. Continue?`)) return
+    setDedupRunning(true)
+    try {
+      const res = await costDatabaseAPI.dedup(false) // dry_run = false — actually merge
+      showMsg(`Cleaned up ${res.data.items_removed} duplicates across ${res.data.duplicate_groups} groups. ${res.data.references_updated} material references updated.`, 'success')
+      setDedupResult(null)
+      loadItems()
+    } catch (err) {
+      showMsg('Failed to merge duplicates: ' + (err.response?.data?.detail || err.message), 'error')
+    } finally {
+      setDedupRunning(false)
     }
   }
 
@@ -369,6 +401,24 @@ export default function CostDatabaseTab() {
               <option key={m} value={m}>{m === 'All' ? 'All Manufacturers' : m}</option>
             ))}
           </select>
+          {/* Clean Duplicates Button */}
+          <button
+            onClick={handleDedupScan}
+            disabled={dedupRunning}
+            className="px-4 py-2 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-300 rounded-md hover:bg-amber-100 flex items-center gap-2 disabled:opacity-50"
+          >
+            {dedupRunning ? (
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            )}
+            Clean Duplicates
+          </button>
           {/* Add Button */}
           <button
             onClick={() => { setModalItem(null); setShowModal(true) }}
@@ -384,6 +434,62 @@ export default function CostDatabaseTab() {
           Showing {filtered.length} of {items.length} items
         </div>
       </div>
+
+      {/* Dedup Results Panel */}
+      {dedupResult && dedupResult.duplicate_groups > 0 && (
+        <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-sm font-semibold text-amber-900">
+                Found {dedupResult.duplicate_groups} duplicate groups ({dedupResult.total_duplicates} items to remove)
+              </h3>
+              <p className="text-xs text-amber-700 mt-0.5">
+                For each group, the best item (with pricing, manufacturer, org-specific) will be kept.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDedupResult(null)}
+                className="px-3 py-1.5 text-xs text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Dismiss
+              </button>
+              <button
+                onClick={handleDedupMerge}
+                disabled={dedupRunning}
+                className="px-4 py-1.5 text-xs font-medium text-white bg-amber-600 rounded-md hover:bg-amber-700 disabled:opacity-50"
+              >
+                {dedupRunning ? 'Merging...' : 'Merge All Duplicates'}
+              </button>
+            </div>
+          </div>
+          <div className="max-h-64 overflow-y-auto space-y-2">
+            {dedupResult.details.map((group, i) => (
+              <div key={i} className="bg-white rounded border border-amber-200 p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded">KEEP</span>
+                  <span className="text-sm font-medium text-gray-900">{group.kept.material_name}</span>
+                  {group.kept.manufacturer && <span className="text-xs text-gray-500">{group.kept.manufacturer}</span>}
+                  {group.kept.unit_cost > 0 && <span className="text-xs text-gray-500">${group.kept.unit_cost}</span>}
+                  <span className="text-[10px] text-gray-400">ID: {group.kept.id}</span>
+                </div>
+                {group.removed.map((dupe, j) => (
+                  <div key={j} className="flex items-center gap-2 ml-4 mt-1">
+                    <span className="text-xs font-semibold text-red-700 bg-red-100 px-1.5 py-0.5 rounded">REMOVE</span>
+                    <span className="text-xs text-gray-700">{dupe.material_name}</span>
+                    {dupe.manufacturer && <span className="text-[10px] text-gray-400">{dupe.manufacturer}</span>}
+                    {dupe.unit_cost > 0 && <span className="text-[10px] text-gray-400">${dupe.unit_cost}</span>}
+                    {dupe.is_global && <span className="text-[10px] text-blue-500">global</span>}
+                    {(dupe.refs_would_relink > 0) && (
+                      <span className="text-[10px] text-amber-600">{dupe.refs_would_relink} refs will relink</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
