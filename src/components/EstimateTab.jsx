@@ -4,188 +4,169 @@ import { LoadingSpinner } from './common'
 
 const fmt = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v || 0)
 const fmtNum = (v) => v != null ? Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'
-const UNIT_LABELS = { sqft: 'SF', lnft: 'LF', each: 'EA' }
-const fmtUnit = (u) => UNIT_LABELS[u] || u
+const UNIT_LABELS = { sqft: 'SF', lnft: 'LF', each: 'EA', gallon: 'GAL', roll: 'Roll', box: 'Box' }
+const fmtUnit = (u) => UNIT_LABELS[u] || (u || '').toUpperCase()
+
+// Category display order and labels
+const CATEGORY_ORDER = [
+  'membrane', 'adhesive', 'sealant', 'base_sheet',
+  'insulation', 'coverboard',
+  'fastener',
+  'flashing',
+  'accessory'
+]
+const CATEGORY_LABELS = {
+  membrane: 'MEMBRANE & ACCESSORIES',
+  adhesive: 'MEMBRANE & ACCESSORIES',
+  sealant: 'MEMBRANE & ACCESSORIES',
+  base_sheet: 'MEMBRANE & ACCESSORIES',
+  insulation: 'INSULATION',
+  coverboard: 'INSULATION',
+  fastener: 'FASTENERS & PLATES',
+  flashing: 'WALL FLASHING & DETAILS',
+  accessory: 'ACCESSORIES'
+}
+
+// Group categories into display sections
+function groupIntoSections(materials) {
+  const sections = {}
+  const sectionOrder = []
+
+  materials.forEach(mat => {
+    const cat = mat.material_category || 'accessory'
+    const sectionLabel = CATEGORY_LABELS[cat] || cat.toUpperCase()
+
+    if (!sections[sectionLabel]) {
+      sections[sectionLabel] = []
+      sectionOrder.push(sectionLabel)
+    }
+    sections[sectionLabel].push(mat)
+  })
+
+  return { sections, sectionOrder }
+}
+
+// Determine if a material is a "metal" (goes on Page 3) vs flat roof material (Page 2)
+function isMetalItem(mat) {
+  const name = (mat.material_name || '').toLowerCase()
+  const cat = (mat.material_category || '').toLowerCase()
+  const metalKeywords = ['coping', 'edge metal', 'drip edge', 'gutter', 'downspout', 'scupper', 'collector head', 'reglet']
+  return cat === 'metal' || metalKeywords.some(k => name.includes(k))
+}
+
 
 // ============================================================================
-// COST SUMMARY CARD
+// PAGE 1: PROJECT SUMMARY
 // ============================================================================
-function CostSummary({ summary }) {
+function ProjectSummaryPage({ summary, estimate }) {
   if (!summary) return null
-  const rows = [
-    { label: 'Materials', value: summary.materials_total, bold: false },
-    { label: 'Labor', value: summary.labor_total, sub: summary.roof_area_sq ? `${fmtNum(summary.roof_area_sq)} squares @ $85/sq` : null },
-    { label: 'Subtotal', value: summary.subtotal, bold: true },
-    { label: `Markup (${((summary.markup_pct || 0) * 100).toFixed(0)}%)`, value: summary.markup },
-    { label: 'Subtotal + Markup', value: summary.subtotal_with_markup, bold: true },
-    { label: `Tax (${((summary.tax_pct || 0) * 100).toFixed(1)}%)`, value: summary.tax, sub: 'On materials only' },
+
+  const specRows = [
+    { label: 'System Type:', value: summary.system_type || '—' },
+    { label: 'Roof Area:', value: summary.roof_area_sf ? `${fmtNum(summary.roof_area_sf)} SF (${fmtNum(summary.roof_area_sq)} SQ)` : '—' },
+  ]
+
+  const flatTotal = estimate?.consolidated_materials
+    ?.filter(m => !isMetalItem(m))
+    .reduce((s, m) => s + (m.total_cost || 0), 0) || 0
+
+  const metalTotal = estimate?.consolidated_materials
+    ?.filter(m => isMetalItem(m))
+    .reduce((s, m) => s + (m.total_cost || 0), 0) || 0
+
+  const laborTotal = summary.labor_total || 0
+  const subtotal = flatTotal + metalTotal + laborTotal
+  const markupPct = summary.markup_pct || 0.25
+  const markup = subtotal * markupPct
+  const subtotalWithMarkup = subtotal + markup
+  const taxPct = summary.tax_pct || 0.0825
+  const tax = (flatTotal + metalTotal) * (1 + markupPct) * taxPct
+  const grandTotal = subtotalWithMarkup + tax
+
+  const costRows = [
+    { label: 'Flat Roof Materials (Page 2):', value: flatTotal, bold: false },
+    { label: 'Roof Related Metals (Page 3):', value: metalTotal, bold: false },
+    { label: 'Labor & General Conditions (Page 4):', value: laborTotal, bold: false },
+    { label: 'SUBTOTAL:', value: subtotal, bold: true },
+    null,
+    { label: `Profit Markup (${(markupPct * 100).toFixed(0)}%):`, value: markup, bold: false },
+    { label: 'SUBTOTAL WITH MARKUP:', value: subtotalWithMarkup, bold: true },
+    null,
+    { label: `Sales Tax (${(taxPct * 100).toFixed(1)}%):`, value: tax, bold: false },
+    { label: 'GRAND TOTAL:', value: grandTotal, bold: true, grand: true },
   ]
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-4 text-white">
-        <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 text-white">
+        <h2 className="text-xl font-bold tracking-wide">PROJECT SUMMARY — ROOFING ESTIMATE</h2>
+      </div>
+
+      <div className="p-6 space-y-6">
+        {/* Project Info */}
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <h3 className="text-lg font-bold">{summary.project_name || 'Estimate'}</h3>
-            {summary.address && <p className="text-blue-100 text-sm mt-0.5">{summary.address}</p>}
+            <span className="text-xs font-semibold text-gray-500 uppercase">Project</span>
+            <p className="text-base font-semibold text-gray-900 mt-0.5">{summary.project_name || '—'}</p>
           </div>
-          <div className="text-right">
-            <div className="text-3xl font-bold">{fmt(summary.grand_total)}</div>
-            <div className="text-blue-200 text-xs mt-1">
-              {summary.system_type && <span className="bg-white/20 px-2 py-0.5 rounded mr-2">{summary.system_type}</span>}
-              {summary.roof_area_sf > 0 && <span>{fmtNum(summary.roof_area_sf)} SF</span>}
-            </div>
+          <div>
+            <span className="text-xs font-semibold text-gray-500 uppercase">Address</span>
+            <p className="text-base text-gray-700 mt-0.5">{summary.address || '—'}</p>
           </div>
         </div>
-      </div>
 
-      <div className="divide-y divide-gray-100 px-5 py-1">
-        {rows.map((row, i) => (
-          <div key={i} className={`flex items-center justify-between py-2.5 ${row.bold ? 'font-semibold' : ''}`}>
-            <div>
-              <span className="text-sm text-gray-700">{row.label}</span>
-              {row.sub && <span className="text-xs text-gray-400 ml-2">{row.sub}</span>}
-            </div>
-            <span className="text-sm font-mono text-gray-900">{fmt(row.value)}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className="bg-green-50 border-t-2 border-green-200 px-5 py-4 flex items-center justify-between">
-        <span className="text-base font-bold text-green-900">Grand Total</span>
-        <span className="text-2xl font-bold text-green-800 font-mono">{fmt(summary.grand_total)}</span>
-      </div>
-
-      {/* Per-Square Cost */}
-      {summary.roof_area_sq > 0 && (
-        <div className="px-5 py-2 bg-gray-50 border-t text-xs text-gray-500 flex justify-between">
-          <span>Cost per Square</span>
-          <span className="font-mono">{fmt(summary.grand_total / summary.roof_area_sq)}/sq</span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-
-// ============================================================================
-// CONDITIONS BREAKDOWN VIEW (By-Condition accordion)
-// ============================================================================
-function ConditionsBreakdown({ breakdown }) {
-  const [expandedIds, setExpandedIds] = useState(new Set())
-
-  const toggle = (id) => {
-    setExpandedIds(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  }
-
-  const expandAll = () => setExpandedIds(new Set(breakdown.map(b => b.condition.id)))
-  const collapseAll = () => setExpandedIds(new Set())
-
-  if (!breakdown || breakdown.length === 0) {
-    return <div className="text-center py-8 text-gray-400 text-sm">No conditions in estimate</div>
-  }
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-700">By Condition</h3>
-        <div className="flex gap-2 text-xs">
-          <button onClick={expandAll} className="text-primary-600 hover:underline">Expand All</button>
-          <span className="text-gray-300">|</span>
-          <button onClick={collapseAll} className="text-primary-600 hover:underline">Collapse All</button>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        {breakdown.map((item) => {
-          const c = item.condition
-          const expanded = expandedIds.has(c.id)
-          const includedMats = item.materials.filter(m => m.is_included)
-
-          return (
-            <div key={c.id} className="border border-gray-200 rounded-lg overflow-hidden">
-              {/* Header */}
-              <div
-                className="flex items-center justify-between px-4 py-3 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
-                onClick={() => toggle(c.id)}
-              >
-                <div className="flex items-center gap-3">
-                  <svg className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                  <div>
-                    <span className="font-semibold text-sm text-gray-900">{c.label || c.type}</span>
-                    <span className="text-xs text-gray-500 ml-2">
-                      {fmtNum(c.measurement)} {fmtUnit(c.unit)}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 text-sm">
-                  <span className="text-xs text-gray-500">{includedMats.length} items</span>
-                  <span className="font-mono font-semibold text-gray-900">{fmt(item.condition_total)}</span>
-                </div>
+        {/* Roof System Specifications */}
+        <div>
+          <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider border-b border-gray-200 pb-2 mb-3">
+            Roof System Specifications
+          </h3>
+          <div className="grid grid-cols-2 gap-y-2 gap-x-6 text-sm">
+            {specRows.map((r, i) => (
+              <div key={i} className="flex justify-between">
+                <span className="text-gray-500">{r.label}</span>
+                <span className="font-medium text-gray-800">{r.value}</span>
               </div>
+            ))}
+          </div>
+        </div>
 
-              {/* Materials */}
-              {expanded && (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="bg-gray-50 border-t border-gray-200">
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Material</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 w-14">Unit</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 w-20">Qty</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 w-24">Unit Cost</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 w-24">Labor</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 w-28">Extended</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {item.materials.map((mat) => (
-                        <tr key={mat.id} className={!mat.is_included ? 'opacity-40' : 'hover:bg-gray-50'}>
-                          <td className="px-4 py-2">
-                            <div className="font-medium text-gray-800">{mat.material_name}</div>
-                            <div className="text-xs text-gray-400">{mat.material_category}</div>
-                          </td>
-                          <td className="px-4 py-2 text-gray-600">{fmtUnit(mat.unit)}</td>
-                          <td className="px-4 py-2 text-right font-mono text-gray-700">
-                            {mat.is_included ? fmtNum(mat.qty_calculated) : '—'}
-                            {mat.override_quantity != null && (
-                              <span className="text-xs text-amber-600 ml-1" title="Manual override">*</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-2 text-right font-mono text-gray-700">
-                            {mat.unit_cost > 0 ? fmt(mat.unit_cost) : '—'}
-                          </td>
-                          <td className="px-4 py-2 text-right font-mono text-gray-700">
-                            {mat.labor_cost > 0 ? fmt(mat.labor_cost) : '—'}
-                          </td>
-                          <td className="px-4 py-2 text-right font-mono font-semibold text-gray-900">
-                            {mat.is_included ? fmt(mat.extended) : '—'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="bg-gray-50 border-t border-gray-200">
-                        <td colSpan={5} className="px-4 py-2 text-right text-xs font-semibold text-gray-600">
-                          Condition Total
-                        </td>
-                        <td className="px-4 py-2 text-right font-mono font-bold text-gray-900">
-                          {fmt(item.condition_total)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
+        {/* Cost Summary */}
+        <div>
+          <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider border-b border-gray-200 pb-2 mb-3">
+            Cost Summary
+          </h3>
+          <div className="space-y-1">
+            {costRows.map((r, i) => {
+              if (!r) return <div key={i} className="h-2" />
+              return (
+                <div
+                  key={i}
+                  className={`flex justify-between py-1.5 px-3 rounded ${
+                    r.grand
+                      ? 'bg-green-50 border-2 border-green-300 mt-2'
+                      : r.bold
+                        ? 'bg-gray-50 font-semibold'
+                        : ''
+                  }`}
+                >
+                  <span className={`text-sm ${r.grand ? 'text-green-900 font-bold' : r.bold ? 'text-gray-800' : 'text-gray-600'}`}>
+                    {r.label}
+                  </span>
+                  <span className={`text-sm font-mono ${r.grand ? 'text-green-800 font-bold text-lg' : r.bold ? 'text-gray-900' : 'text-gray-700'}`}>
+                    {fmt(r.value)}
+                  </span>
                 </div>
-              )}
+              )
+            })}
+          </div>
+
+          {summary.roof_area_sq > 0 && (
+            <div className="mt-3 text-right text-xs text-gray-500 font-mono">
+              Cost per Square: {fmt(grandTotal / summary.roof_area_sq)}/sq
             </div>
-          )
-        })}
+          )}
+        </div>
       </div>
     </div>
   )
@@ -193,71 +174,264 @@ function ConditionsBreakdown({ breakdown }) {
 
 
 // ============================================================================
-// CONSOLIDATED MATERIALS VIEW (for purchasing)
+// PAGE 2: FLAT ROOF MATERIALS
 // ============================================================================
-function ConsolidatedMaterials({ materials }) {
-  if (!materials || materials.length === 0) {
-    return <div className="text-center py-8 text-gray-400 text-sm">No consolidated materials</div>
+function FlatRoofMaterialsPage({ materials }) {
+  // Filter out metals (they go on Page 3)
+  const flatMats = (materials || []).filter(m => !isMetalItem(m))
+
+  if (flatMats.length === 0) {
+    return <div className="text-center py-8 text-gray-400 text-sm">No flat roof materials in estimate</div>
   }
 
-  // Group by category
-  const grouped = {}
-  materials.forEach(m => {
-    const cat = m.material_category || 'Other'
-    if (!grouped[cat]) grouped[cat] = []
-    grouped[cat].push(m)
+  // Sort by category order
+  flatMats.sort((a, b) => {
+    const ai = CATEGORY_ORDER.indexOf(a.material_category || 'accessory')
+    const bi = CATEGORY_ORDER.indexOf(b.material_category || 'accessory')
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
   })
 
-  const grandTotal = materials.reduce((s, m) => s + (m.total_cost || 0), 0)
+  const { sections, sectionOrder } = groupIntoSections(flatMats)
+  const pageTotal = flatMats.reduce((s, m) => s + (m.total_cost || 0), 0)
+
+  let lineNum = 0
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-700">Consolidated Materials (for Purchasing)</h3>
-        <span className="text-sm font-mono font-semibold text-gray-900">{fmt(grandTotal)}</span>
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="bg-gray-800 px-6 py-4">
+        <h2 className="text-lg font-bold text-white tracking-wide">FLAT ROOF MATERIALS</h2>
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead>
-            <tr className="bg-gray-100 border-b border-gray-200">
-              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">Material</th>
-              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 w-14">Unit</th>
-              <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 w-24">Total Qty</th>
-              <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 w-24">Unit Cost</th>
-              <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 w-24">Labor/Unit</th>
-              <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 w-28">Total Cost</th>
+            <tr className="bg-gray-100 border-b border-gray-300">
+              <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 w-10">#</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-gray-600">Description</th>
+              <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-20">Qty</th>
+              <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-20">Waste %</th>
+              <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-24">Rounded Qty</th>
+              <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 w-16">Unit</th>
+              <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-24">Unit Cost</th>
+              <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-28">Extended Cost</th>
             </tr>
           </thead>
           <tbody>
-            {Object.entries(grouped).map(([category, items]) => (
-              <tbody key={category}>
-                {/* Category Header */}
-                <tr className="bg-gray-50">
-                  <td colSpan={6} className="px-4 py-2 text-xs font-bold text-gray-600 uppercase tracking-wider">
-                    {category}
+            {sectionOrder.map((sectionLabel) => {
+              const items = sections[sectionLabel]
+              return (
+                <tbody key={sectionLabel}>
+                  {/* Section Header */}
+                  <tr className="bg-blue-50 border-t-2 border-blue-200">
+                    <td colSpan={8} className="px-4 py-2.5 text-xs font-bold text-blue-800 uppercase tracking-wider">
+                      {sectionLabel}
+                    </td>
+                  </tr>
+                  {items.map((mat) => {
+                    lineNum++
+                    const baseQty = mat.total_qty / (1 + (mat.waste_pct || 0))
+                    const wastePct = mat.waste_pct || 0
+                    const roundedQty = Math.ceil(mat.total_qty)
+                    const unitCost = mat.unit_cost + (mat.labor_cost || 0)
+                    const extCost = mat.total_cost
+
+                    return (
+                      <tr key={mat.material_name} className="border-t border-gray-100 hover:bg-gray-50">
+                        <td className="px-4 py-2.5 text-gray-500 font-mono text-xs">{lineNum}</td>
+                        <td className="px-4 py-2.5 font-medium text-gray-800">{mat.material_name}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-gray-700">{fmtNum(mat.total_qty)}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-gray-500">
+                          {wastePct > 0 ? `${(wastePct * 100).toFixed(0)}%` : '—'}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-800">{fmtNum(roundedQty)}</td>
+                        <td className="px-4 py-2.5 text-center text-gray-600">{fmtUnit(mat.unit)}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-gray-700">{unitCost > 0 ? fmt(unitCost) : '—'}</td>
+                        <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-900">{extCost > 0 ? fmt(extCost) : '—'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              )
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="bg-gray-100 border-t-2 border-gray-400">
+              <td colSpan={7} className="px-4 py-3 text-right text-sm font-bold text-gray-700 uppercase">
+                Page 2 Total:
+              </td>
+              <td className="px-4 py-3 text-right font-mono font-bold text-gray-900 text-base">
+                {fmt(pageTotal)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+
+// ============================================================================
+// PAGE 3: ROOF RELATED METALS
+// ============================================================================
+function RoofMetalsPage({ materials }) {
+  const metals = (materials || []).filter(m => isMetalItem(m))
+
+  if (metals.length === 0) {
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="bg-gray-800 px-6 py-4">
+          <h2 className="text-lg font-bold text-white tracking-wide">ROOF RELATED METALS</h2>
+        </div>
+        <div className="text-center py-8 text-gray-400 text-sm">No metal items in estimate</div>
+      </div>
+    )
+  }
+
+  const pageTotal = metals.reduce((s, m) => s + (m.total_cost || 0), 0)
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="bg-gray-800 px-6 py-4">
+        <h2 className="text-lg font-bold text-white tracking-wide">ROOF RELATED METALS</h2>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="bg-gray-100 border-b border-gray-300">
+              <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 w-10">#</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-gray-600">Description</th>
+              <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-20">Qty</th>
+              <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 w-16">Unit</th>
+              <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-24">Unit Cost</th>
+              <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-28">Extended Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            {metals.map((mat, i) => {
+              const unitCost = mat.unit_cost + (mat.labor_cost || 0)
+              return (
+                <tr key={mat.material_name} className="border-t border-gray-100 hover:bg-gray-50">
+                  <td className="px-4 py-2.5 text-gray-500 font-mono text-xs">{i + 1}</td>
+                  <td className="px-4 py-2.5 font-medium text-gray-800">{mat.material_name}</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-gray-700">{fmtNum(Math.ceil(mat.total_qty))}</td>
+                  <td className="px-4 py-2.5 text-center text-gray-600">{fmtUnit(mat.unit)}</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-gray-700">{unitCost > 0 ? fmt(unitCost) : '—'}</td>
+                  <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-900">{mat.total_cost > 0 ? fmt(mat.total_cost) : '—'}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="bg-gray-100 border-t-2 border-gray-400">
+              <td colSpan={5} className="px-4 py-3 text-right text-sm font-bold text-gray-700 uppercase">
+                Page 3 Total:
+              </td>
+              <td className="px-4 py-3 text-right font-mono font-bold text-gray-900 text-base">
+                {fmt(pageTotal)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+
+// ============================================================================
+// PAGE 4: LABOR & GENERAL CONDITIONS
+// ============================================================================
+function LaborPage({ summary }) {
+  if (!summary) return null
+
+  const laborRate = 85.00
+  const squares = summary.roof_area_sq || 0
+  const laborTotal = squares * laborRate
+
+  const laborRows = [
+    {
+      section: 'LABOR',
+      items: [
+        { desc: 'Flat Roof Installation Labor', qty: fmtNum(squares), unit: 'SQ', rate: fmt(laborRate), total: laborTotal },
+      ]
+    },
+    {
+      section: 'EQUIPMENT RENTAL',
+      items: [
+        { desc: 'Telehandler / Crane (if needed)', qty: 'TBD', unit: 'Rental', rate: '—', total: 0 },
+      ]
+    },
+    {
+      section: 'SITE FACILITIES',
+      items: [
+        { desc: 'Portable Toilets', qty: 'TBD', unit: 'Month', rate: '—', total: 0 },
+        { desc: 'Dumpster - 30 Yard', qty: 'TBD', unit: 'Month', rate: '—', total: 0 },
+      ]
+    },
+    {
+      section: 'PERMITS & FEES',
+      items: [
+        { desc: 'Building Permit', qty: 'TBD', unit: 'LS', rate: 'Owner to verify', total: 0 },
+      ]
+    },
+  ]
+
+  const pageTotal = laborTotal
+  let lineNum = 0
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="bg-gray-800 px-6 py-4">
+        <h2 className="text-lg font-bold text-white tracking-wide">LABOR & GENERAL CONDITIONS</h2>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="bg-gray-100 border-b border-gray-300">
+              <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 w-10">#</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-gray-600">Description</th>
+              <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-20">Qty</th>
+              <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 w-16">Unit</th>
+              <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-24">Rate/Cost</th>
+              <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-28">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {laborRows.map(({ section, items }) => (
+              <tbody key={section}>
+                <tr className="bg-blue-50 border-t-2 border-blue-200">
+                  <td colSpan={6} className="px-4 py-2.5 text-xs font-bold text-blue-800 uppercase tracking-wider">
+                    {section}
                   </td>
                 </tr>
-                {items.map((mat, i) => (
-                  <tr key={i} className="hover:bg-gray-50 border-t border-gray-100">
-                    <td className="px-4 py-2.5 font-medium text-gray-800">{mat.material_name}</td>
-                    <td className="px-4 py-2.5 text-gray-600">{fmtUnit(mat.unit)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-gray-800 font-semibold">{fmtNum(mat.total_qty)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-gray-600">{fmt(mat.unit_cost)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-gray-600">{mat.labor_cost > 0 ? fmt(mat.labor_cost) : '—'}</td>
-                    <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-900">{fmt(mat.total_cost)}</td>
-                  </tr>
-                ))}
+                {items.map((item) => {
+                  lineNum++
+                  return (
+                    <tr key={lineNum} className="border-t border-gray-100 hover:bg-gray-50">
+                      <td className="px-4 py-2.5 text-gray-500 font-mono text-xs">{lineNum}</td>
+                      <td className="px-4 py-2.5 font-medium text-gray-800">{item.desc}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-gray-700">{item.qty}</td>
+                      <td className="px-4 py-2.5 text-center text-gray-600">{item.unit}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-gray-700">{item.rate}</td>
+                      <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-900">
+                        {item.total > 0 ? fmt(item.total) : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             ))}
           </tbody>
           <tfoot>
-            <tr className="bg-gray-100 border-t-2 border-gray-300">
-              <td colSpan={5} className="px-4 py-3 text-right text-sm font-bold text-gray-700">
-                Materials Total
+            <tr className="bg-gray-100 border-t-2 border-gray-400">
+              <td colSpan={5} className="px-4 py-3 text-right text-sm font-bold text-gray-700 uppercase">
+                Page 4 Total:
               </td>
               <td className="px-4 py-3 text-right font-mono font-bold text-gray-900 text-base">
-                {fmt(grandTotal)}
+                {fmt(pageTotal)}
               </td>
             </tr>
           </tfoot>
@@ -295,6 +469,17 @@ function ErrorsPanel({ errors }) {
 
 
 // ============================================================================
+// PAGE TABS
+// ============================================================================
+const PAGES = [
+  { key: 'summary', label: 'Project Summary', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+  { key: 'flat', label: 'Flat Roof Materials', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
+  { key: 'metals', label: 'Roof Metals', icon: 'M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6z' },
+  { key: 'labor', label: 'Labor & GC', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
+]
+
+
+// ============================================================================
 // MAIN ESTIMATE TAB
 // ============================================================================
 export default function EstimateTab({ projectId }) {
@@ -303,7 +488,7 @@ export default function EstimateTab({ projectId }) {
   const [calculating, setCalculating] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [viewMode, setViewMode] = useState('conditions') // 'conditions' | 'consolidated'
+  const [activePage, setActivePage] = useState('summary')
   const [savedStatus, setSavedStatus] = useState(null)
 
   // Load saved estimate on mount
@@ -376,7 +561,7 @@ export default function EstimateTab({ projectId }) {
   return (
     <div>
       {/* Header Bar */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Estimate</h2>
           <p className="text-xs text-gray-500 mt-0.5">
@@ -461,42 +646,42 @@ export default function EstimateTab({ projectId }) {
           </button>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Errors */}
           <ErrorsPanel errors={estimate.errors} />
 
-          {/* Cost Summary */}
-          <CostSummary summary={estimate.summary} />
-
-          {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg w-fit">
-            <button
-              onClick={() => setViewMode('conditions')}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                viewMode === 'conditions'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              By Condition
-            </button>
-            <button
-              onClick={() => setViewMode('consolidated')}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                viewMode === 'consolidated'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Consolidated
-            </button>
+          {/* Page Tabs */}
+          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg overflow-x-auto">
+            {PAGES.map(page => (
+              <button
+                key={page.key}
+                onClick={() => setActivePage(page.key)}
+                className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+                  activePage === page.key
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={page.icon} />
+                </svg>
+                {page.label}
+              </button>
+            ))}
           </div>
 
-          {/* Detail Views */}
-          {viewMode === 'conditions' ? (
-            <ConditionsBreakdown breakdown={estimate.conditions_breakdown} />
-          ) : (
-            <ConsolidatedMaterials materials={estimate.consolidated_materials} />
+          {/* Page Content */}
+          {activePage === 'summary' && (
+            <ProjectSummaryPage summary={estimate.summary} estimate={estimate} />
+          )}
+          {activePage === 'flat' && (
+            <FlatRoofMaterialsPage materials={estimate.consolidated_materials} />
+          )}
+          {activePage === 'metals' && (
+            <RoofMetalsPage materials={estimate.consolidated_materials} />
+          )}
+          {activePage === 'labor' && (
+            <LaborPage summary={estimate.summary} />
           )}
         </div>
       )}
