@@ -123,8 +123,8 @@ function ProjectSummaryPage({ summary, totals, pricing, onPricingChange }) {
   const costRows = [
     { label: 'Flat Roof Materials (Page 2):', value: t.flatTotal },
     { label: 'Roof Related Metals (Page 3):', value: t.metalTotal },
-    { label: 'Labor & General Conditions (Page 4):', value: t.laborTotal },
-    ...(t.equipmentTotal > 0 ? [{ label: 'Equipment:', value: t.equipmentTotal }] : []),
+    { label: 'Labor (Page 4):', value: t.laborTotal },
+    { label: 'General Conditions (Page 5):', value: t.gcTotal },
     { label: 'SUBTOTAL:', value: t.subtotal, bold: true },
     null,
     { label: `Profit Margin (${pricing.markupPct}%):`, value: t.markup },
@@ -498,7 +498,7 @@ function RoofMetalsPage({ materials, onUpdateMaterial }) {
 
 
 // ============================================================================
-// PAGE 4: LABOR & GENERAL CONDITIONS
+// PAGE 4: LABOR
 // ============================================================================
 function LaborPage({ summary }) {
   if (!summary) return null
@@ -508,40 +508,17 @@ function LaborPage({ summary }) {
   const laborTotal = squares * laborRate
 
   const laborRows = [
-    {
-      section: 'LABOR',
-      items: [
-        { desc: 'Flat Roof Installation Labor', qty: fmtNum(squares), unit: 'SQ', rate: fmt(laborRate), total: laborTotal },
-      ]
-    },
-    {
-      section: 'EQUIPMENT RENTAL',
-      items: [
-        { desc: 'Telehandler / Crane (if needed)', qty: 'TBD', unit: 'Rental', rate: '—', total: 0 },
-      ]
-    },
-    {
-      section: 'SITE FACILITIES',
-      items: [
-        { desc: 'Portable Toilets', qty: 'TBD', unit: 'Month', rate: '—', total: 0 },
-        { desc: 'Dumpster - 30 Yard', qty: 'TBD', unit: 'Month', rate: '—', total: 0 },
-      ]
-    },
-    {
-      section: 'PERMITS & FEES',
-      items: [
-        { desc: 'Building Permit', qty: 'TBD', unit: 'LS', rate: 'Owner to verify', total: 0 },
-      ]
-    },
+    { desc: 'Flat Roof Installation Labor', qty: fmtNum(squares), unit: 'SQ', rate: fmt(laborRate), total: laborTotal },
+    { desc: 'Tear-Off Labor', qty: '—', unit: 'SQ', rate: '—', total: 0 },
+    { desc: 'Metal Flashing Install Labor', qty: '—', unit: 'LF', rate: '—', total: 0 },
   ]
 
-  const pageTotal = laborTotal
-  let lineNum = 0
+  const pageTotal = laborRows.reduce((s, r) => s + (r.total || 0), 0)
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
       <div className="bg-gray-800 px-6 py-4">
-        <h2 className="text-lg font-bold text-white tracking-wide">LABOR & GENERAL CONDITIONS</h2>
+        <h2 className="text-lg font-bold text-white tracking-wide">LABOR</h2>
       </div>
 
       <div className="overflow-x-auto">
@@ -556,34 +533,137 @@ function LaborPage({ summary }) {
               <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-28">Total</th>
             </tr>
           </thead>
-          {laborRows.map(({ section, items }) => (
-            <tbody key={section}>
-              <tr className="bg-blue-50 border-t-2 border-blue-200">
-                <td colSpan={6} className="px-4 py-2.5 text-xs font-bold text-blue-800 uppercase tracking-wider">
-                  {section}
+          <tbody>
+            {laborRows.map((item, i) => (
+              <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
+                <td className="px-4 py-2.5 text-gray-500 font-mono text-xs">{i + 1}</td>
+                <td className="px-4 py-2.5 font-medium text-gray-800">{item.desc}</td>
+                <td className="px-4 py-2.5 text-right font-mono text-gray-700">{item.qty}</td>
+                <td className="px-4 py-2.5 text-center text-gray-600">{item.unit}</td>
+                <td className="px-4 py-2.5 text-right font-mono text-gray-700">{item.rate}</td>
+                <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-900">
+                  {item.total > 0 ? fmt(item.total) : '—'}
                 </td>
               </tr>
-              {items.map((item) => {
-                lineNum++
-                return (
-                  <tr key={lineNum} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="px-4 py-2.5 text-gray-500 font-mono text-xs w-10">{lineNum}</td>
-                    <td className="px-4 py-2.5 font-medium text-gray-800">{item.desc}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-gray-700 w-20">{item.qty}</td>
-                    <td className="px-4 py-2.5 text-center text-gray-600 w-16">{item.unit}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-gray-700 w-24">{item.rate}</td>
-                    <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-900 w-28">
-                      {item.total > 0 ? fmt(item.total) : '—'}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          ))}
+            ))}
+          </tbody>
           <tfoot>
             <tr className="bg-gray-100 border-t-2 border-gray-400">
               <td colSpan={5} className="px-4 py-3 text-right text-sm font-bold text-gray-700 uppercase">
-                Page 4 Total:
+                Labor Total:
+              </td>
+              <td className="px-4 py-3 text-right font-mono font-bold text-gray-900 text-base">
+                {fmt(pageTotal)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+
+// ============================================================================
+// PAGE 5: GENERAL CONDITIONS
+// ============================================================================
+
+// Default GC line items
+const DEFAULT_GC_ITEMS = [
+  // Equipment Rental
+  { id: 'telehandler', section: 'EQUIPMENT RENTAL', desc: 'Telehandler', qty: 0, unit: 'Day', rate: 0, total: 0 },
+  { id: 'forklift', section: 'EQUIPMENT RENTAL', desc: 'Forklift', qty: 0, unit: 'Day', rate: 0, total: 0 },
+  { id: 'scissor_lift', section: 'EQUIPMENT RENTAL', desc: 'Scissor Lift', qty: 0, unit: 'Day', rate: 0, total: 0 },
+  { id: 'boom_lift', section: 'EQUIPMENT RENTAL', desc: 'Boom Lift', qty: 0, unit: 'Day', rate: 0, total: 0 },
+  { id: 'crane', section: 'EQUIPMENT RENTAL', desc: 'Crane', qty: 0, unit: 'Day', rate: 0, total: 0 },
+  { id: 'other_rental', section: 'EQUIPMENT RENTAL', desc: 'Other Rental Equipment', qty: 0, unit: 'LS', rate: 0, total: 0 },
+  // Site & Permits
+  { id: 'permit', section: 'SITE & PERMITS', desc: 'Permit', qty: 0, unit: 'LS', rate: 0, total: 0 },
+  { id: 'portapotty', section: 'SITE & PERMITS', desc: 'Port-a-Potty', qty: 0, unit: 'Month', rate: 0, total: 0 },
+  { id: 'vacuum', section: 'SITE & PERMITS', desc: 'Vacuum', qty: 0, unit: 'Day', rate: 0, total: 0 },
+  { id: 'temp_fence', section: 'SITE & PERMITS', desc: 'Temporary Fence', qty: 0, unit: 'LF', rate: 0, total: 0 },
+  { id: 'dumpsters', section: 'SITE & PERMITS', desc: 'Dumpsters', qty: 0, unit: 'Each', rate: 0, total: 0 },
+  { id: 'other_site', section: 'SITE & PERMITS', desc: 'Other', qty: 0, unit: 'LS', rate: 0, total: 0 },
+]
+
+function GeneralConditionsPage({ gcItems, onUpdateGcItem }) {
+  // Group items by section
+  const sections = {}
+  const sectionOrder = []
+  gcItems.forEach(item => {
+    if (!sections[item.section]) {
+      sections[item.section] = []
+      sectionOrder.push(item.section)
+    }
+    sections[item.section].push(item)
+  })
+
+  const pageTotal = gcItems.reduce((s, item) => s + (item.total || 0), 0)
+  let lineNum = 0
+
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="bg-gray-800 px-6 py-4">
+        <h2 className="text-lg font-bold text-white tracking-wide">GENERAL CONDITIONS</h2>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="bg-gray-100 border-b border-gray-300">
+              <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 w-10">#</th>
+              <th className="px-4 py-3 text-left text-xs font-bold text-gray-600">Description</th>
+              <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-20">Qty</th>
+              <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 w-16">Unit</th>
+              <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-28">Unit Cost</th>
+              <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-32">Extended Cost</th>
+            </tr>
+          </thead>
+          {sectionOrder.map(sectionLabel => {
+            const items = sections[sectionLabel]
+            return (
+              <tbody key={sectionLabel}>
+                <tr className="bg-blue-50 border-t-2 border-blue-200">
+                  <td colSpan={6} className="px-4 py-2.5 text-xs font-bold text-blue-800 uppercase tracking-wider">
+                    {sectionLabel}
+                  </td>
+                </tr>
+                {items.map((item) => {
+                  lineNum++
+                  const idx = gcItems.findIndex(g => g.id === item.id)
+                  return (
+                    <tr key={item.id} className="border-t border-gray-100 hover:bg-gray-50">
+                      <td className="px-4 py-2.5 text-gray-500 font-mono text-xs">{lineNum}</td>
+                      <td className="px-4 py-2.5 font-medium text-gray-800">{item.desc}</td>
+                      <td className="px-4 py-2.5 text-right">
+                        <EditableCell
+                          value={item.qty}
+                          onSave={(v) => onUpdateGcItem(idx, 'qty', v)}
+                          className="font-mono text-gray-700"
+                        />
+                      </td>
+                      <td className="px-4 py-2.5 text-center text-gray-600">{item.unit}</td>
+                      <td className="px-4 py-2.5 text-right">
+                        <EditableCell
+                          value={item.rate}
+                          onSave={(v) => onUpdateGcItem(idx, 'rate', v)}
+                          prefix="$"
+                          className="font-mono text-gray-700"
+                        />
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-900">
+                        {item.total > 0 ? fmt(item.total) : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            )
+          })}
+          <tfoot>
+            <tr className="bg-gray-100 border-t-2 border-gray-400">
+              <td colSpan={5} className="px-4 py-3 text-right text-sm font-bold text-gray-700 uppercase">
+                General Conditions Total:
               </td>
               <td className="px-4 py-3 text-right font-mono font-bold text-gray-900 text-base">
                 {fmt(pageTotal)}
@@ -600,9 +680,9 @@ function LaborPage({ summary }) {
 // ============================================================================
 // PAGE 5: RECAP
 // ============================================================================
-function RecapPage({ materials, summary, pricing, onPricingChange }) {
+function RecapPage({ materials, summary, pricing, onPricingChange, gcItems }) {
   const allMats = materials || []
-  const t = computeTotals(allMats, summary, pricing)
+  const t = computeTotals(allMats, summary, pricing, gcItems)
 
   return (
     <div>
@@ -625,15 +705,13 @@ function RecapPage({ materials, summary, pricing, onPricingChange }) {
                 <td className="py-2.5 text-right font-mono text-gray-800">{fmt(t.metalTotal)}</td>
               </tr>
               <tr className="border-b border-gray-100">
-                <td className="py-2.5 text-gray-600">Labor & General Conditions</td>
+                <td className="py-2.5 text-gray-600">Labor</td>
                 <td className="py-2.5 text-right font-mono text-gray-800">{fmt(t.laborTotal)}</td>
               </tr>
-              {t.equipmentTotal > 0 && (
-                <tr className="border-b border-gray-100">
-                  <td className="py-2.5 text-gray-600">Equipment</td>
-                  <td className="py-2.5 text-right font-mono text-gray-800">{fmt(t.equipmentTotal)}</td>
-                </tr>
-              )}
+              <tr className="border-b border-gray-100">
+                <td className="py-2.5 text-gray-600">General Conditions</td>
+                <td className="py-2.5 text-right font-mono text-gray-800">{fmt(t.gcTotal)}</td>
+              </tr>
               <tr className="bg-gray-50 border-b-2 border-gray-300">
                 <td className="py-3 font-bold text-gray-800">SUBTOTAL</td>
                 <td className="py-3 text-right font-mono font-bold text-gray-900">{fmt(t.subtotal)}</td>
@@ -836,7 +914,8 @@ const PAGES = [
   { key: 'summary', label: 'Project Summary', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
   { key: 'flat', label: 'Flat Roof Materials', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
   { key: 'metals', label: 'Roof Metals', icon: 'M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6z' },
-  { key: 'labor', label: 'Labor & GC', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
+  { key: 'labor', label: 'Labor', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
+  { key: 'gc', label: 'General Conditions', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m4-14v6m-3-3h6' },
   { key: 'recap', label: 'Recap', icon: 'M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z' },
 ]
 
@@ -861,8 +940,8 @@ function calcExtCostShared(m) {
   return perUnit * pQty
 }
 
-// Compute all totals from materials, summary, and pricing
-function computeTotals(materials, summary, pricing) {
+// Compute all totals from materials, summary, pricing, and gcItems
+function computeTotals(materials, summary, pricing, gcItems) {
   const flatTotal = (materials || [])
     .filter(m => !isMetalItem(m))
     .reduce((s, m) => s + calcExtCostShared(m), 0)
@@ -873,7 +952,8 @@ function computeTotals(materials, summary, pricing) {
 
   const materialTotal = flatTotal + metalTotal
   const laborTotal = summary?.labor_total || 0
-  const equipmentTotal = summary?.equipment_total || 0
+  const gcTotal = (gcItems || []).reduce((s, item) => s + (item.total || 0), 0)
+  const equipmentTotal = (summary?.equipment_total || 0) + gcTotal
   const subtotal = materialTotal + laborTotal + equipmentTotal
 
   // Profit margin formula: selling_price = cost / (1 - margin%)
@@ -907,7 +987,7 @@ function computeTotals(materials, summary, pricing) {
 
   return {
     flatTotal, metalTotal, materialTotal,
-    laborTotal, equipmentTotal, subtotal,
+    laborTotal, gcTotal, equipmentTotal, subtotal,
     marginPct, markup, subtotalWithMarkup,
     materialWithMargin, laborWithMargin, equipmentWithMargin,
     tax, subtotalWithTax,
@@ -928,6 +1008,19 @@ export default function EstimateTab({ projectId }) {
   const [activePage, setActivePage] = useState('summary')
   const [savedStatus, setSavedStatus] = useState(null)
   const [pricing, setPricing] = useState({ ...DEFAULT_PRICING })
+  const [gcItems, setGcItems] = useState(DEFAULT_GC_ITEMS.map(item => ({ ...item })))
+
+  // Handle inline edits to GC items
+  const handleUpdateGcItem = (idx, field, value) => {
+    setGcItems(prev => {
+      const updated = [...prev]
+      const item = { ...updated[idx] }
+      item[field] = value
+      item.total = (item.qty || 0) * (item.rate || 0)
+      updated[idx] = item
+      return updated
+    })
+  }
 
   // Load saved estimate on mount
   const loadEstimate = useCallback(async () => {
@@ -970,7 +1063,7 @@ export default function EstimateTab({ projectId }) {
     if (!estimate) return
     setSaving(true)
     try {
-      const dataToSave = { ...estimate, pricing }
+      const dataToSave = { ...estimate, pricing, gcItems }
       await estimateAPI.save(projectId, dataToSave)
       setSavedStatus('Saved!')
       setTimeout(() => setSavedStatus(null), 3000)
@@ -989,6 +1082,9 @@ export default function EstimateTab({ projectId }) {
         const loaded = res.data.estimate_data
         if (loaded.pricing) {
           setPricing({ ...DEFAULT_PRICING, ...loaded.pricing })
+        }
+        if (loaded.gcItems) {
+          setGcItems(loaded.gcItems)
         }
         setEstimate(loaded)
         setSavedStatus('Loaded saved estimate')
@@ -1161,7 +1257,7 @@ export default function EstimateTab({ projectId }) {
           {activePage === 'summary' && (
             <ProjectSummaryPage
               summary={estimate.summary}
-              totals={computeTotals(taggedMaterials, estimate.summary, pricing)}
+              totals={computeTotals(taggedMaterials, estimate.summary, pricing, gcItems)}
               pricing={pricing}
               onPricingChange={setPricing}
             />
@@ -1175,12 +1271,16 @@ export default function EstimateTab({ projectId }) {
           {activePage === 'labor' && (
             <LaborPage summary={estimate.summary} />
           )}
+          {activePage === 'gc' && (
+            <GeneralConditionsPage gcItems={gcItems} onUpdateGcItem={handleUpdateGcItem} />
+          )}
           {activePage === 'recap' && (
             <RecapPage
               materials={taggedMaterials}
               summary={estimate.summary}
               pricing={pricing}
               onPricingChange={setPricing}
+              gcItems={gcItems}
             />
           )}
         </div>
