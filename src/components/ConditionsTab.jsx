@@ -239,35 +239,26 @@ function MaterialRow({ material, onUpdate, onDelete, onSwap }) {
           <span className="font-mono text-gray-700">{(material.waste_factor * 100).toFixed(0)}%</span>
         )}
       </td>
-      {/* Override Qty */}
-      <td className="px-3 py-2">
-        {editing ? (
-          <input
-            type="number"
-            step="0.01"
-            value={values.override_quantity}
-            onChange={(e) => setValues({ ...values, override_quantity: e.target.value })}
-            placeholder="Auto"
-            className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
-          />
+      {/* Qty (calculated) */}
+      <td className="px-3 py-2 text-right">
+        <span className="font-mono text-gray-700">
+          {material.is_included && material.qty_calculated ? fmtNum(material.qty_calculated) : '—'}
+        </span>
+      </td>
+      {/* Unit Cost */}
+      <td className="px-3 py-2 text-right">
+        {material.unit_cost > 0 ? (
+          <span className="font-mono text-gray-700">${fmtNum(material.unit_cost)}</span>
         ) : (
-          <span className={`font-mono ${material.override_quantity != null ? 'text-amber-700 font-semibold' : 'text-gray-400'}`}>
-            {material.override_quantity != null ? fmtNum(material.override_quantity) : 'Auto'}
-          </span>
+          <span className="text-xs text-amber-500" title="No cost database match">—</span>
         )}
       </td>
-      {/* Notes */}
-      <td className="px-3 py-2 max-w-[120px]">
-        {editing ? (
-          <input
-            type="text"
-            value={values.notes}
-            onChange={(e) => setValues({ ...values, notes: e.target.value })}
-            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-            placeholder="Notes..."
-          />
+      {/* Extended Cost */}
+      <td className="px-3 py-2 text-right">
+        {material.is_included && material.extended_cost > 0 ? (
+          <span className="font-mono font-medium text-gray-900">${fmtNum(material.extended_cost)}</span>
         ) : (
-          <span className="text-xs text-gray-500 truncate block">{material.notes || '—'}</span>
+          <span className="text-gray-400">—</span>
         )}
       </td>
       {/* Actions */}
@@ -570,8 +561,9 @@ function ConditionCard({ condition, onRefresh, onToggleActive, isSystemCondition
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-14">Unit</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-20">Coverage</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-16">Waste</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 w-20">Override</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Notes</th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-20">Qty</th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-20">Unit Cost</th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-24">Ext. Cost</th>
                     <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-24">Actions</th>
                   </tr>
                 </thead>
@@ -586,6 +578,20 @@ function ConditionCard({ condition, onRefresh, onToggleActive, isSystemCondition
                     />
                   ))}
                 </tbody>
+                {/* Condition Subtotal */}
+                <tfoot>
+                  <tr className="bg-gray-50 border-t border-gray-200">
+                    <td colSpan={5} className="px-3 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Condition Total</td>
+                    <td className="px-3 py-2 text-right text-sm font-mono font-semibold text-gray-700">
+                      {fmtNum(materials.filter(m => m.is_included).reduce((sum, m) => sum + (m.qty_calculated || 0), 0))}
+                    </td>
+                    <td className="px-3 py-2"></td>
+                    <td className="px-3 py-2 text-right text-sm font-mono font-bold text-gray-900">
+                      ${fmtNum(materials.filter(m => m.is_included).reduce((sum, m) => sum + (m.extended_cost || 0), 0))}
+                    </td>
+                    <td></td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           ) : (

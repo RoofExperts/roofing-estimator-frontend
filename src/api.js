@@ -152,6 +152,13 @@ export const adminAPI = {
     })
   },
   deleteLogo: () => api.delete('/api/v1/admin/company/logo'),
+  // System Templates
+  getSystemTemplate: (systemType) => api.get(`/api/v1/admin/system-templates/${systemType}`),
+  addTemplateCondition: (systemType, data) => api.post(`/api/v1/admin/system-templates/${systemType}/conditions`, data),
+  updateTemplateCondition: (systemType, condId, data) => api.put(`/api/v1/admin/system-templates/${systemType}/conditions/${condId}`, data),
+  deleteTemplateCondition: (systemType, condId) => api.delete(`/api/v1/admin/system-templates/${systemType}/conditions/${condId}`),
+  reorderTemplateConditions: (systemType, conditionIds) => api.put(`/api/v1/admin/system-templates/${systemType}/reorder`, { condition_ids: conditionIds }),
+  resetSystemTemplate: (systemType) => api.post(`/api/v1/admin/system-templates/${systemType}/reset`),
 }
 
 // ============= CUSTOMERS =============
