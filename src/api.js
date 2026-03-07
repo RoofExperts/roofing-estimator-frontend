@@ -115,6 +115,14 @@ export const planAPI = {
   deleteMarkup: (markupId) => api.delete(`/api/v1/markups/${markupId}`),
 }
 
+// ============= ROOF SYSTEMS =============
+export const systemAPI = {
+  list: (projectId) => api.get(`/api/v1/projects/${projectId}/systems`),
+  create: (projectId, data) => api.post(`/api/v1/projects/${projectId}/systems`, data),
+  update: (systemId, data) => api.put(`/api/v1/systems/${systemId}`, data),
+  delete: (systemId) => api.delete(`/api/v1/systems/${systemId}`),
+}
+
 // ============= ESTIMATES =============
 export const estimateAPI = {
   calculate: (projectId) => api.post(`/api/v1/projects/${projectId}/calculate-estimate`),

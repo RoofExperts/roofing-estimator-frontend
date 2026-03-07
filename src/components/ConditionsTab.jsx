@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { conditionAPI, referenceAPI, planAPI, projectAPI } from '../api'
+import { conditionAPI, referenceAPI, planAPI, projectAPI, systemAPI } from '../api'
 import { LoadingSpinner, ErrorDisplay } from './common'
 import Modal from './Modal'
 
@@ -319,7 +319,7 @@ function MaterialRow({ material, onUpdate, onDelete, onSwap }) {
 // ============================================================================
 // CONDITION CARD — Accordion card for one condition with materials table
 // ============================================================================
-function ConditionCard({ condition, onRefresh }) {
+function ConditionCard({ condition, onRefresh, onToggleActive, isSystemCondition }) {
   const [expanded, setExpanded] = useState(false)
   const [editingCondition, setEditingCondition] = useState(false)
   const [condValues, setCondValues] = useState({})
@@ -459,6 +459,15 @@ function ConditionCard({ condition, onRefresh }) {
           >
             Edit
           </button>
+          {isSystemCondition && onToggleActive && (
+            <button
+              onClick={onToggleActive}
+              className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 hover:bg-amber-200"
+              title="Disable this condition"
+            >
+              Disable
+            </button>
+          )}
           <button
             onClick={handleDeleteCondition}
             className="text-red-600 hover:text-red-800 opacity-70 hover:opacity-100"
@@ -866,6 +875,7 @@ function PlanAnalysisSection({ projectId, onConditionsChanged }) {
 // ============================================================================
 export default function ConditionsTab({ projectId }) {
   const [conditions, setConditions] = useState([])
+  const [systems, setSystems] = useState([])
   const [conditionTypes, setConditionTypes] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -873,6 +883,7 @@ export default function ConditionsTab({ projectId }) {
   const [smartBuilding, setSmartBuilding] = useState(false)
   const [smartBuildResult, setSmartBuildResult] = useState(null)
   const [projectData, setProjectData] = useState(null)
+  const [showInactive, setShowInactive] = useState(false)
   const [newCondition, setNewCondition] = useState({
     condition_type: '', description: '', measurement_value: '', measurement_unit: 'sqft', wind_zone: '1',
   })
@@ -884,8 +895,15 @@ export default function ConditionsTab({ projectId }) {
         referenceAPI.conditionTypes().catch(() => ({ data: [] })),
         projectAPI.get(projectId).catch(() => ({ data: null })),
       ])
-      setConditions(condRes.data || [])
-      // conditionTypes can come as [{value, label}] or just strings
+      // Handle new response format: { conditions: [...], systems: [...] }
+      const data = condRes.data
+      if (data && data.conditions) {
+        setConditions(data.conditions || [])
+        setSystems(data.systems || [])
+      } else {
+        // Backward compat: old format returns array directly
+        setConditions(Array.isArray(data) ? data : [])
+      }
       const types = typesRes.data?.condition_types || typesRes.data || []
       setConditionTypes(types)
       setProjectData(projRes.data)
@@ -949,11 +967,27 @@ export default function ConditionsTab({ projectId }) {
 
   if (loading) return <LoadingSpinner />
 
-  // Summarize
-  const totalSF = conditions.reduce((s, c) => s + (c.measurement_unit === 'sqft' ? (c.measurement_value || 0) : 0), 0)
-  const totalLF = conditions.reduce((s, c) => s + (c.measurement_unit === 'lnft' ? (c.measurement_value || 0) : 0), 0)
-  const totalEA = conditions.reduce((s, c) => s + (c.measurement_unit === 'each' ? (c.measurement_value || 0) : 0), 0)
-  const totalMaterials = conditions.reduce((s, c) => s + (c.materials?.length || 0), 0)
+  // Separate active and inactive conditions
+  const activeConditions = conditions.filter(c => c.is_active !== false)
+  const inactiveConditions = conditions.filter(c => c.is_active === false)
+
+  // Summarize (active only)
+  const totalSF = activeConditions.reduce((s, c) => s + (c.measurement_unit === 'sqft' ? (c.measurement_value || 0) : 0), 0)
+  const totalLF = activeConditions.reduce((s, c) => s + (c.measurement_unit === 'lnft' ? (c.measurement_value || 0) : 0), 0)
+  const totalEA = activeConditions.reduce((s, c) => s + (c.measurement_unit === 'each' ? (c.measurement_value || 0) : 0), 0)
+  const totalMaterials = activeConditions.reduce((s, c) => s + (c.materials?.length || 0), 0)
+
+  // Toggle condition active/inactive
+  const handleToggleConditionActive = async (conditionId, currentActive) => {
+    try {
+      await conditionAPI.update(conditionId, { is_active: !currentActive })
+      fetchConditions()
+    } catch {
+      setError('Failed to toggle condition')
+    }
+  }
+
+  const currentSystem = systems.length > 0 ? systems[0] : null
 
   return (
     <div>
@@ -1027,12 +1061,23 @@ export default function ConditionsTab({ projectId }) {
                 <span className="inline-flex items-center px-2 py-0.5 bg-blue-600 text-white text-xs font-bold rounded mr-2">
                   {smartBuildResult.system_type}
                 </span>
-                System
+                {smartBuildResult.system_name || 'Roof System'}
               </h4>
-              <span className="text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded">
-                {smartBuildResult.conditions_created} conditions, {smartBuildResult.materials_populated || 0} materials
-              </span>
+              <div className="flex gap-2">
+                <span className="text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded">
+                  {smartBuildResult.conditions_active || 0} active
+                </span>
+                <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                  {smartBuildResult.conditions_inactive || 0} inactive
+                </span>
+                <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-0.5 rounded">
+                  {smartBuildResult.materials_populated || 0} materials
+                </span>
+              </div>
             </div>
+            {smartBuildResult.note && (
+              <p className="text-xs text-blue-700 mb-2">{smartBuildResult.note}</p>
+            )}
             {smartBuildResult.spec_data && (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                 {smartBuildResult.spec_data.membrane && <div><span className="text-gray-500">Membrane:</span> <strong>{smartBuildResult.spec_data.membrane}</strong></div>}
@@ -1045,26 +1090,81 @@ export default function ConditionsTab({ projectId }) {
         )}
       </div>
 
-      {/* Conditions Header */}
-      <div className="flex justify-between items-center mb-4">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Roof Conditions</h2>
-          <div className="flex gap-3 text-xs text-gray-500 mt-1">
-            <span>{conditions.length} conditions</span>
-            <span>{totalMaterials} materials</span>
-            {totalSF > 0 && <span>{totalSF.toLocaleString()} SF</span>}
-            {totalLF > 0 && <span>{totalLF.toLocaleString()} LF</span>}
-            {totalEA > 0 && <span>{totalEA.toLocaleString()} EA</span>}
+      {/* System Header */}
+      {currentSystem && (
+        <div className="mb-4 bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-primary-100 flex items-center justify-center">
+              <svg className="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">{currentSystem.name}</h2>
+              <div className="flex gap-2 items-center mt-0.5">
+                <span className="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-semibold rounded">
+                  {currentSystem.system_type}
+                </span>
+                <span className="text-xs text-gray-500">
+                  {activeConditions.length} active / {conditions.length} total conditions
+                </span>
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="inline-flex items-center px-3 py-2 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-700"
+          >
+            <PlusIcon className="w-4 h-4 mr-1" />
+            Add Condition
+          </button>
+        </div>
+      )}
+
+      {/* Conditions Header (when no system exists) */}
+      {!currentSystem && (
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Roof Conditions</h2>
+            <div className="flex gap-3 text-xs text-gray-500 mt-1">
+              <span>{activeConditions.length} active conditions</span>
+              <span>{totalMaterials} materials</span>
+              {totalSF > 0 && <span>{totalSF.toLocaleString()} SF</span>}
+              {totalLF > 0 && <span>{totalLF.toLocaleString()} LF</span>}
+              {totalEA > 0 && <span>{totalEA.toLocaleString()} EA</span>}
+            </div>
+          </div>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="inline-flex items-center px-3 py-2 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-700"
+          >
+            <PlusIcon className="w-4 h-4 mr-1" />
+            Add Condition
+          </button>
+        </div>
+      )}
+
+      {/* Summary Stats (active conditions) */}
+      {activeConditions.length > 0 && (
+        <div className="mb-4 grid grid-cols-4 gap-3">
+          <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
+            <div className="text-lg font-bold text-gray-900">{activeConditions.length}</div>
+            <div className="text-xs text-gray-500">Active</div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
+            <div className="text-lg font-bold text-blue-600">{totalSF > 0 ? totalSF.toLocaleString() : '—'}</div>
+            <div className="text-xs text-gray-500">SF</div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
+            <div className="text-lg font-bold text-green-600">{totalLF > 0 ? totalLF.toLocaleString() : '—'}</div>
+            <div className="text-xs text-gray-500">LF</div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-lg p-3 text-center">
+            <div className="text-lg font-bold text-amber-600">{totalEA > 0 ? totalEA.toLocaleString() : '—'}</div>
+            <div className="text-xs text-gray-500">EA</div>
           </div>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="inline-flex items-center px-3 py-2 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-700"
-        >
-          <PlusIcon className="w-4 h-4 mr-1" />
-          Add Condition
-        </button>
-      </div>
+      )}
 
       {error && (
         <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3 flex items-center justify-between">
@@ -1073,7 +1173,7 @@ export default function ConditionsTab({ projectId }) {
         </div>
       )}
 
-      {/* Conditions Accordion List */}
+      {/* Active Conditions */}
       {conditions.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <svg className="mx-auto h-12 w-12 text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1083,15 +1183,65 @@ export default function ConditionsTab({ projectId }) {
           <p className="text-sm text-gray-400">Upload plans and run Smart Build, or add conditions manually.</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {conditions.map((c) => (
-            <ConditionCard
-              key={c.id}
-              condition={c}
-              onRefresh={fetchConditions}
-            />
-          ))}
-        </div>
+        <>
+          <div className="space-y-3">
+            {activeConditions.map((c) => (
+              <ConditionCard
+                key={c.id}
+                condition={c}
+                onRefresh={fetchConditions}
+                onToggleActive={() => handleToggleConditionActive(c.id, true)}
+                isSystemCondition={!!c.roof_system_id}
+              />
+            ))}
+          </div>
+
+          {/* Inactive Conditions Section */}
+          {inactiveConditions.length > 0 && (
+            <div className="mt-6">
+              <button
+                onClick={() => setShowInactive(!showInactive)}
+                className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-3"
+              >
+                {showInactive ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                <span className="font-medium">
+                  {inactiveConditions.length} inactive condition{inactiveConditions.length !== 1 ? 's' : ''}
+                </span>
+                <span className="text-xs text-gray-400">— click to enable</span>
+              </button>
+              {showInactive && (
+                <div className="space-y-2">
+                  {inactiveConditions.map((c) => {
+                    const ct_info = { label: c.condition_label || c.condition_type }
+                    const colors = TYPE_COLORS[c.condition_type] || TYPE_COLORS.custom
+                    return (
+                      <div
+                        key={c.id}
+                        className="border border-gray-200 rounded-lg bg-gray-50 px-4 py-3 flex items-center justify-between opacity-60 hover:opacity-80 transition-opacity"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className={`inline-flex items-center px-2 py-0.5 ${colors.bg} ${colors.text} text-xs font-semibold rounded`}>
+                            {ct_info.label}
+                          </span>
+                          <span className="text-sm text-gray-500">
+                            {fmtNum(c.measurement_value)} {fmtUnit(c.measurement_unit)}
+                          </span>
+                          <span className="text-xs text-gray-400 italic">No plan data</span>
+                        </div>
+                        <button
+                          onClick={() => handleToggleConditionActive(c.id, false)}
+                          className="inline-flex items-center px-3 py-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100"
+                        >
+                          Enable
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {/* Add Condition Modal */}
