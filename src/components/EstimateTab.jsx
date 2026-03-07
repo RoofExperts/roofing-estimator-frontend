@@ -22,9 +22,11 @@ function EditableCell({ value, onSave, formatter, className, prefix, suffix, typ
 
   const handleSave = () => {
     setEditing(false)
-    const parsed = parseFloat(draft)
-    if (!isNaN(parsed) && parsed !== value) {
-      onSave(parsed)
+    if (type === 'text') {
+      if (draft !== value) onSave(draft)
+    } else {
+      const parsed = parseFloat(draft)
+      if (!isNaN(parsed) && parsed !== value) onSave(parsed)
     }
   }
 
@@ -43,7 +45,7 @@ function EditableCell({ value, onSave, formatter, className, prefix, suffix, typ
         onBlur={handleSave}
         onKeyDown={handleKeyDown}
         autoFocus
-        className={`w-full bg-white border border-blue-400 rounded px-1.5 py-0.5 text-right font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 ${className || ''}`}
+        className={`w-full bg-white border border-blue-400 rounded px-1.5 py-0.5 ${type === 'text' ? 'text-center' : 'text-right font-mono'} text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 ${className || ''}`}
       />
     )
   }
@@ -642,7 +644,14 @@ function GeneralConditionsPage({ gcItems, onUpdateGcItem }) {
                           className="font-mono text-gray-700"
                         />
                       </td>
-                      <td className="px-4 py-2.5 text-center text-gray-600">{item.unit}</td>
+                      <td className="px-4 py-2.5 text-center">
+                        <EditableCell
+                          value={item.unit}
+                          onSave={(v) => onUpdateGcItem(idx, 'unit', v)}
+                          type="text"
+                          className="font-medium text-gray-600 text-center"
+                        />
+                      </td>
                       <td className="px-4 py-2.5 text-right">
                         <EditableCell
                           value={item.rate}
@@ -1016,7 +1025,9 @@ export default function EstimateTab({ projectId }) {
       const updated = [...prev]
       const item = { ...updated[idx] }
       item[field] = value
-      item.total = (item.qty || 0) * (item.rate || 0)
+      if (field !== 'unit') {
+        item.total = (item.qty || 0) * (item.rate || 0)
+      }
       updated[idx] = item
       return updated
     })
