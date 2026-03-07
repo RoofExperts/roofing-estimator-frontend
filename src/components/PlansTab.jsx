@@ -69,6 +69,13 @@ export default function PlansTab({ projectId }) {
     setUploading(true)
     setError('')
     try {
+      // Wake up backend first (Render free tier sleeps after inactivity)
+      try {
+        await fetch(`${API_BASE_URL}/api/v1/vision-version`, { signal: AbortSignal.timeout(60000) })
+      } catch (e) {
+        // If wake-up fails, still try upload — backend may just be slow
+        console.warn('Backend wake-up ping failed, attempting upload anyway:', e.message)
+      }
       await planAPI.upload(projectId, file)
       await fetchPlans()
     } catch (err) {
@@ -205,7 +212,7 @@ export default function PlansTab({ projectId }) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
         </svg>
         <p className="text-sm text-gray-600 mb-2">
-          {uploading ? 'Uploading...' : 'Drag and drop a PDF roof plan here, or'}
+          {uploading ? 'Uploading... (may take a moment if server is waking up)' : 'Drag and drop a PDF roof plan here, or'}
         </p>
         <button
           onClick={() => fileInputRef.current?.click()}

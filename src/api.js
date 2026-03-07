@@ -98,7 +98,8 @@ export const planAPI = {
     const fd = new FormData()
     fd.append('file', file)
     return api.post(`/api/v1/projects/${projectId}/upload-plan`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000, // 2 min timeout for large PDFs + Render cold starts
     })
   },
   list: (projectId) => api.get(`/api/v1/projects/${projectId}/plan-files`),
