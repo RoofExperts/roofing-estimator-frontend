@@ -110,7 +110,7 @@ function isMetalItem(mat) {
 // ============================================================================
 // PAGE 1: PROJECT SUMMARY
 // ============================================================================
-function ProjectSummaryPage({ summary, estimate }) {
+function ProjectSummaryPage({ summary, totals, pricing, onPricingChange }) {
   if (!summary) return null
 
   const specRows = [
@@ -118,48 +118,45 @@ function ProjectSummaryPage({ summary, estimate }) {
     { label: 'Roof Area:', value: summary.roof_area_sf ? `${fmtNum(summary.roof_area_sf)} SF (${fmtNum(summary.roof_area_sq)} SQ)` : '—' },
   ]
 
-  const calcExtCost = (m) => {
-    const hasPU = m.purchase_unit && m.units_per_purchase
-    const pQty = m.purchase_qty || Math.ceil(m.total_qty)
-    const perUnit = hasPU
-      ? (m.units_per_purchase * (m.unit_cost + (m.labor_cost || 0)))
-      : (m.unit_cost + (m.labor_cost || 0))
-    return perUnit * pQty
-  }
-
-  const flatTotal = estimate?.consolidated_materials
-    ?.filter(m => !isMetalItem(m))
-    .reduce((s, m) => s + calcExtCost(m), 0) || 0
-
-  const metalTotal = estimate?.consolidated_materials
-    ?.filter(m => isMetalItem(m))
-    .reduce((s, m) => s + calcExtCost(m), 0) || 0
-
-  const laborTotal = summary.labor_total || 0
-  const subtotal = flatTotal + metalTotal + laborTotal
-  const markupPct = summary.markup_pct || 0.25
-  const markup = subtotal * markupPct
-  const subtotalWithMarkup = subtotal + markup
-  const taxPct = summary.tax_pct || 0.0825
-  const tax = (flatTotal + metalTotal) * (1 + markupPct) * taxPct
-  const grandTotal = subtotalWithMarkup + tax
+  const t = totals
 
   const costRows = [
-    { label: 'Flat Roof Materials (Page 2):', value: flatTotal, bold: false },
-    { label: 'Roof Related Metals (Page 3):', value: metalTotal, bold: false },
-    { label: 'Labor & General Conditions (Page 4):', value: laborTotal, bold: false },
-    { label: 'SUBTOTAL:', value: subtotal, bold: true },
+    { label: 'Flat Roof Materials (Page 2):', value: t.flatTotal },
+    { label: 'Roof Related Metals (Page 3):', value: t.metalTotal },
+    { label: 'Labor & General Conditions (Page 4):', value: t.laborTotal },
+    ...(t.equipmentTotal > 0 ? [{ label: 'Equipment:', value: t.equipmentTotal }] : []),
+    { label: 'SUBTOTAL:', value: t.subtotal, bold: true },
     null,
-    { label: `Profit Markup (${(markupPct * 100).toFixed(0)}%):`, value: markup, bold: false },
-    { label: 'SUBTOTAL WITH MARKUP:', value: subtotalWithMarkup, bold: true },
+    { label: `Profit Markup (${pricing.markupPct}%):`, value: t.markup },
+    { label: 'SUBTOTAL WITH MARKUP:', value: t.subtotalWithMarkup, bold: true },
     null,
-    { label: `Sales Tax (${(taxPct * 100).toFixed(1)}%):`, value: tax, bold: false },
-    { label: 'GRAND TOTAL:', value: grandTotal, bold: true, grand: true },
   ]
+
+  // Tax rows
+  if (pricing.taxMode === 'group') {
+    if (pricing.materialTaxPct > 0) {
+      costRows.push({ label: `Material Tax (${pricing.materialTaxPct}%):`, value: t.materialTotal * (1 + t.markupPct) * (pricing.materialTaxPct / 100) })
+    }
+    if (pricing.laborTaxPct > 0) {
+      costRows.push({ label: `Labor Tax (${pricing.laborTaxPct}%):`, value: t.laborTotal * (1 + t.markupPct) * (pricing.laborTaxPct / 100) })
+    }
+    if (pricing.equipmentTaxPct > 0) {
+      costRows.push({ label: `Equipment Tax (${pricing.equipmentTaxPct}%):`, value: t.equipmentTotal * (1 + t.markupPct) * (pricing.equipmentTaxPct / 100) })
+    }
+    costRows.push({ label: 'TOTAL TAX:', value: t.tax, bold: true })
+  } else {
+    costRows.push({ label: `Sales Tax (${pricing.projectTaxPct}%):`, value: t.tax })
+  }
+
+  if (t.bond > 0) {
+    costRows.push(null)
+    costRows.push({ label: `P&P Bond (${pricing.bondPct}%):`, value: t.bond })
+  }
+
+  costRows.push({ label: 'GRAND TOTAL:', value: t.grandTotal, bold: true, grand: true })
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 text-white">
         <h2 className="text-xl font-bold tracking-wide">PROJECT SUMMARY — ROOFING ESTIMATE</h2>
       </div>
@@ -224,7 +221,7 @@ function ProjectSummaryPage({ summary, estimate }) {
 
           {summary.roof_area_sq > 0 && (
             <div className="mt-3 text-right text-xs text-gray-500 font-mono">
-              Cost per Square: {fmt(grandTotal / summary.roof_area_sq)}/sq
+              Cost per Square: {fmt(t.grandTotal / summary.roof_area_sq)}/sq
             </div>
           )}
         </div>
@@ -601,6 +598,337 @@ function LaborPage({ summary }) {
 
 
 // ============================================================================
+// PAGE 5: RECAP
+// ============================================================================
+function RecapPage({ materials, summary, pricing, onPricingChange, onUpdateMaterial }) {
+  const allMats = materials || []
+  const t = computeTotals(allMats, summary, pricing)
+
+  // Build recap rows: all materials sorted by category
+  const sortedMats = [...allMats].sort((a, b) => {
+    const ai = CATEGORY_ORDER.indexOf(a.material_category || 'accessory')
+    const bi = CATEGORY_ORDER.indexOf(b.material_category || 'accessory')
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
+  })
+
+  const { sections, sectionOrder } = groupIntoSections(sortedMats)
+  let lineNum = 0
+
+  return (
+    <div className="space-y-6">
+      {/* Materials Recap Table */}
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="bg-gray-800 px-6 py-4">
+          <h2 className="text-lg font-bold text-white tracking-wide">COST RECAP</h2>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm table-fixed">
+            <colgroup>
+              <col className="w-10" />
+              <col />
+              <col className="w-24" />
+              <col className="w-16" />
+              <col className="w-16" />
+              <col className="w-16" />
+              <col className="w-28" />
+              <col className="w-32" />
+            </colgroup>
+            <thead>
+              <tr className="bg-gray-100 border-b border-gray-300">
+                <th className="px-3 py-3 text-left text-xs font-bold text-gray-600">#</th>
+                <th className="px-3 py-3 text-left text-xs font-bold text-gray-600">Description</th>
+                <th className="px-3 py-3 text-right text-xs font-bold text-gray-600">Item Count</th>
+                <th className="px-3 py-3 text-center text-xs font-bold text-gray-600">Waste %</th>
+                <th className="px-3 py-3 text-right text-xs font-bold text-gray-600">Qty</th>
+                <th className="px-3 py-3 text-center text-xs font-bold text-gray-600">Unit</th>
+                <th className="px-3 py-3 text-right text-xs font-bold text-gray-600">Unit Cost</th>
+                <th className="px-3 py-3 text-right text-xs font-bold text-gray-600">Extended Cost</th>
+              </tr>
+            </thead>
+            {sectionOrder.map((sectionLabel) => {
+              const items = sections[sectionLabel]
+              return (
+                <tbody key={sectionLabel}>
+                  <tr className="bg-blue-50 border-t-2 border-blue-200">
+                    <td colSpan={8} className="px-3 py-2.5 text-xs font-bold text-blue-800 uppercase tracking-wider">
+                      {sectionLabel}
+                    </td>
+                  </tr>
+                  {items.map((mat) => {
+                    lineNum++
+                    const hasPurchaseUnit = mat.purchase_unit && mat.units_per_purchase
+                    const displayName = mat.product_name || mat.material_name
+                    const purchaseQty = mat.purchase_qty || Math.ceil(mat.total_qty)
+                    const displayUnit = hasPurchaseUnit ? mat.purchase_unit : fmtUnit(mat.unit)
+                    const itemCount = hasPurchaseUnit ? fmtNum(mat.total_qty) + ' ' + fmtUnit(mat.unit) : null
+                    const perUnitCost = hasPurchaseUnit
+                      ? (mat.units_per_purchase * (mat.unit_cost + (mat.labor_cost || 0)))
+                      : (mat.unit_cost + (mat.labor_cost || 0))
+                    const extCost = perUnitCost * purchaseQty
+                    const wastePct = mat.waste_pct || 0
+                    const matKey = mat._idx
+
+                    return (
+                      <tr key={mat.material_name + mat.unit} className="border-t border-gray-100 hover:bg-gray-50">
+                        <td className="px-3 py-2.5 text-gray-500 font-mono text-xs">{lineNum}</td>
+                        <td className="px-3 py-2.5">
+                          <div className="font-medium text-gray-800">{displayName}</div>
+                          {hasPurchaseUnit && (
+                            <div className="text-xs text-gray-400">
+                              {fmtNum(mat.units_per_purchase)} {fmtUnit(mat.unit)} per {mat.purchase_unit.toLowerCase()}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-mono text-xs text-gray-500">
+                          {itemCount || '—'}
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          <EditableCell
+                            value={Math.round(wastePct * 100)}
+                            onSave={(v) => onUpdateMaterial(matKey, 'waste_pct', v / 100)}
+                            suffix="%"
+                            className="text-xs font-mono"
+                          />
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-mono font-semibold text-gray-800">
+                          {fmtNum(purchaseQty)}
+                        </td>
+                        <td className="px-3 py-2.5 text-center text-gray-600">{displayUnit}</td>
+                        <td className="px-3 py-2.5 text-right">
+                          <EditableCell
+                            value={parseFloat(perUnitCost.toFixed(2))}
+                            onSave={(v) => {
+                              const baseCost = hasPurchaseUnit
+                                ? (v / mat.units_per_purchase) - (mat.labor_cost || 0)
+                                : v - (mat.labor_cost || 0)
+                              onUpdateMaterial(matKey, 'unit_cost', Math.max(0, baseCost))
+                            }}
+                            prefix="$"
+                            className="font-mono text-gray-700"
+                          />
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-mono font-semibold text-gray-900">
+                          {extCost > 0 ? fmt(extCost) : '—'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              )
+            })}
+            <tfoot>
+              <tr className="bg-gray-100 border-t-2 border-gray-400">
+                <td colSpan={7} className="px-3 py-3 text-right text-sm font-bold text-gray-700 uppercase">
+                  Materials Subtotal:
+                </td>
+                <td className="px-3 py-3 text-right font-mono font-bold text-gray-900 text-base">
+                  {fmt(t.materialTotal)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* Pricing Summary with Editable Fields */}
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="bg-gray-800 px-6 py-4">
+          <h2 className="text-lg font-bold text-white tracking-wide">PROJECT TOTALS</h2>
+        </div>
+
+        <div className="p-6">
+          <table className="w-full text-sm">
+            <tbody>
+              {/* Cost Groups */}
+              <tr className="border-b border-gray-100">
+                <td className="py-2.5 text-gray-600">Flat Roof Materials</td>
+                <td className="py-2.5 text-right font-mono text-gray-800">{fmt(t.flatTotal)}</td>
+              </tr>
+              <tr className="border-b border-gray-100">
+                <td className="py-2.5 text-gray-600">Roof Related Metals</td>
+                <td className="py-2.5 text-right font-mono text-gray-800">{fmt(t.metalTotal)}</td>
+              </tr>
+              <tr className="border-b border-gray-100">
+                <td className="py-2.5 text-gray-600">Labor & General Conditions</td>
+                <td className="py-2.5 text-right font-mono text-gray-800">{fmt(t.laborTotal)}</td>
+              </tr>
+              {t.equipmentTotal > 0 && (
+                <tr className="border-b border-gray-100">
+                  <td className="py-2.5 text-gray-600">Equipment</td>
+                  <td className="py-2.5 text-right font-mono text-gray-800">{fmt(t.equipmentTotal)}</td>
+                </tr>
+              )}
+              <tr className="bg-gray-50 border-b-2 border-gray-300">
+                <td className="py-3 font-bold text-gray-800">SUBTOTAL</td>
+                <td className="py-3 text-right font-mono font-bold text-gray-900">{fmt(t.subtotal)}</td>
+              </tr>
+
+              {/* Editable Markup */}
+              <tr className="border-b border-gray-100">
+                <td className="py-2.5 text-gray-600">
+                  Profit Markup{' '}
+                  <span className="inline-flex items-center">
+                    (<EditableCell
+                      value={pricing.markupPct}
+                      onSave={(v) => onPricingChange({ ...pricing, markupPct: v })}
+                      suffix="%"
+                      className="text-xs font-mono"
+                    />)
+                  </span>
+                </td>
+                <td className="py-2.5 text-right font-mono text-gray-800">{fmt(t.markup)}</td>
+              </tr>
+              <tr className="bg-gray-50 border-b-2 border-gray-300">
+                <td className="py-3 font-bold text-gray-800">SUBTOTAL WITH MARKUP</td>
+                <td className="py-3 text-right font-mono font-bold text-gray-900">{fmt(t.subtotalWithMarkup)}</td>
+              </tr>
+
+              {/* Sales Tax Section */}
+              <tr className="border-b border-gray-100">
+                <td colSpan={2} className="py-3">
+                  <div className="flex items-center gap-4 mb-2">
+                    <span className="text-gray-700 font-medium text-sm">Sales Tax</span>
+                    <div className="flex items-center gap-2 text-xs">
+                      <button
+                        onClick={() => onPricingChange({ ...pricing, taxMode: 'project' })}
+                        className={`px-2.5 py-1 rounded-md border transition-colors ${
+                          pricing.taxMode === 'project'
+                            ? 'bg-blue-50 border-blue-300 text-blue-700 font-medium'
+                            : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                        }`}
+                      >
+                        Project Level
+                      </button>
+                      <button
+                        onClick={() => onPricingChange({ ...pricing, taxMode: 'group' })}
+                        className={`px-2.5 py-1 rounded-md border transition-colors ${
+                          pricing.taxMode === 'group'
+                            ? 'bg-blue-50 border-blue-300 text-blue-700 font-medium'
+                            : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                        }`}
+                      >
+                        By Group
+                      </button>
+                    </div>
+                  </div>
+
+                  {pricing.taxMode === 'project' ? (
+                    <div className="flex justify-between items-center pl-4">
+                      <span className="text-gray-600 text-sm">
+                        Project Tax{' '}
+                        <span className="inline-flex items-center">
+                          (<EditableCell
+                            value={pricing.projectTaxPct}
+                            onSave={(v) => onPricingChange({ ...pricing, projectTaxPct: v })}
+                            suffix="%"
+                            className="text-xs font-mono"
+                          />)
+                        </span>
+                      </span>
+                      <span className="font-mono text-gray-800">{fmt(t.tax)}</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-1 pl-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 text-sm">
+                          Material Tax{' '}
+                          <span className="inline-flex items-center">
+                            (<EditableCell
+                              value={pricing.materialTaxPct}
+                              onSave={(v) => onPricingChange({ ...pricing, materialTaxPct: v })}
+                              suffix="%"
+                              className="text-xs font-mono"
+                            />)
+                          </span>
+                        </span>
+                        <span className="font-mono text-gray-800 text-sm">
+                          {fmt(t.materialTotal * (1 + t.markupPct) * (pricing.materialTaxPct / 100))}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 text-sm">
+                          Labor Tax{' '}
+                          <span className="inline-flex items-center">
+                            (<EditableCell
+                              value={pricing.laborTaxPct}
+                              onSave={(v) => onPricingChange({ ...pricing, laborTaxPct: v })}
+                              suffix="%"
+                              className="text-xs font-mono"
+                            />)
+                          </span>
+                        </span>
+                        <span className="font-mono text-gray-800 text-sm">
+                          {fmt(t.laborTotal * (1 + t.markupPct) * (pricing.laborTaxPct / 100))}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600 text-sm">
+                          Equipment Tax{' '}
+                          <span className="inline-flex items-center">
+                            (<EditableCell
+                              value={pricing.equipmentTaxPct}
+                              onSave={(v) => onPricingChange({ ...pricing, equipmentTaxPct: v })}
+                              suffix="%"
+                              className="text-xs font-mono"
+                            />)
+                          </span>
+                        </span>
+                        <span className="font-mono text-gray-800 text-sm">
+                          {fmt(t.equipmentTotal * (1 + t.markupPct) * (pricing.equipmentTaxPct / 100))}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center pt-1 border-t border-gray-200 font-medium">
+                        <span className="text-gray-700 text-sm">Total Tax</span>
+                        <span className="font-mono text-gray-900">{fmt(t.tax)}</span>
+                      </div>
+                    </div>
+                  )}
+                </td>
+              </tr>
+
+              <tr className="bg-gray-50 border-b-2 border-gray-300">
+                <td className="py-3 font-bold text-gray-800">SUBTOTAL WITH TAX</td>
+                <td className="py-3 text-right font-mono font-bold text-gray-900">{fmt(t.subtotalWithTax)}</td>
+              </tr>
+
+              {/* P&P Bond */}
+              <tr className="border-b border-gray-100">
+                <td className="py-2.5 text-gray-600">
+                  P&P Bond{' '}
+                  <span className="inline-flex items-center">
+                    (<EditableCell
+                      value={pricing.bondPct}
+                      onSave={(v) => onPricingChange({ ...pricing, bondPct: v })}
+                      suffix="%"
+                      className="text-xs font-mono"
+                    />)
+                  </span>
+                </td>
+                <td className="py-2.5 text-right font-mono text-gray-800">{fmt(t.bond)}</td>
+              </tr>
+
+              {/* Grand Total */}
+              <tr className="bg-green-50 border-2 border-green-300">
+                <td className="py-4 px-3 font-bold text-green-900 text-base">GRAND TOTAL</td>
+                <td className="py-4 px-3 text-right font-mono font-bold text-green-800 text-lg">{fmt(t.grandTotal)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {summary?.roof_area_sq > 0 && (
+            <div className="mt-3 text-right text-xs text-gray-500 font-mono">
+              Cost per Square: {fmt(t.grandTotal / summary.roof_area_sq)}/sq
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+// ============================================================================
 // ERRORS PANEL
 // ============================================================================
 function ErrorsPanel({ errors }) {
@@ -634,7 +962,75 @@ const PAGES = [
   { key: 'flat', label: 'Flat Roof Materials', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
   { key: 'metals', label: 'Roof Metals', icon: 'M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6z' },
   { key: 'labor', label: 'Labor & GC', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
+  { key: 'recap', label: 'Recap', icon: 'M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z' },
 ]
+
+// Default pricing configuration
+const DEFAULT_PRICING = {
+  markupPct: 25,
+  taxMode: 'project',       // 'project' or 'group'
+  projectTaxPct: 8.25,
+  materialTaxPct: 8.25,
+  laborTaxPct: 0,
+  equipmentTaxPct: 0,
+  bondPct: 0,
+}
+
+// Shared helper: compute extended cost for a material
+function calcExtCostShared(m) {
+  const hasPU = m.purchase_unit && m.units_per_purchase
+  const pQty = m.purchase_qty || Math.ceil(m.total_qty)
+  const perUnit = hasPU
+    ? (m.units_per_purchase * (m.unit_cost + (m.labor_cost || 0)))
+    : (m.unit_cost + (m.labor_cost || 0))
+  return perUnit * pQty
+}
+
+// Compute all totals from materials, summary, and pricing
+function computeTotals(materials, summary, pricing) {
+  const flatTotal = (materials || [])
+    .filter(m => !isMetalItem(m))
+    .reduce((s, m) => s + calcExtCostShared(m), 0)
+
+  const metalTotal = (materials || [])
+    .filter(m => isMetalItem(m))
+    .reduce((s, m) => s + calcExtCostShared(m), 0)
+
+  const materialTotal = flatTotal + metalTotal
+  const laborTotal = summary?.labor_total || 0
+  const equipmentTotal = summary?.equipment_total || 0
+  const subtotal = materialTotal + laborTotal + equipmentTotal
+
+  const markupPct = (pricing.markupPct || 0) / 100
+  const markup = subtotal * markupPct
+  const subtotalWithMarkup = subtotal + markup
+
+  // Tax calculation
+  let tax = 0
+  if (pricing.taxMode === 'group') {
+    tax += materialTotal * (1 + markupPct) * ((pricing.materialTaxPct || 0) / 100)
+    tax += laborTotal * (1 + markupPct) * ((pricing.laborTaxPct || 0) / 100)
+    tax += equipmentTotal * (1 + markupPct) * ((pricing.equipmentTaxPct || 0) / 100)
+  } else {
+    tax = subtotalWithMarkup * ((pricing.projectTaxPct || 0) / 100)
+  }
+
+  const subtotalWithTax = subtotalWithMarkup + tax
+
+  // P&P Bond
+  const bondPct = (pricing.bondPct || 0) / 100
+  const bond = subtotalWithTax * bondPct
+
+  const grandTotal = subtotalWithTax + bond
+
+  return {
+    flatTotal, metalTotal, materialTotal,
+    laborTotal, equipmentTotal, subtotal,
+    markupPct, markup, subtotalWithMarkup,
+    tax, subtotalWithTax,
+    bondPct, bond, grandTotal,
+  }
+}
 
 
 // ============================================================================
@@ -648,6 +1044,7 @@ export default function EstimateTab({ projectId }) {
   const [error, setError] = useState('')
   const [activePage, setActivePage] = useState('summary')
   const [savedStatus, setSavedStatus] = useState(null)
+  const [pricing, setPricing] = useState({ ...DEFAULT_PRICING })
 
   // Load saved estimate on mount
   const loadEstimate = useCallback(async () => {
@@ -685,12 +1082,13 @@ export default function EstimateTab({ projectId }) {
     }
   }
 
-  // Save estimate snapshot
+  // Save estimate snapshot (includes pricing)
   const handleSave = async () => {
     if (!estimate) return
     setSaving(true)
     try {
-      await estimateAPI.save(projectId, estimate)
+      const dataToSave = { ...estimate, pricing }
+      await estimateAPI.save(projectId, dataToSave)
       setSavedStatus('Saved!')
       setTimeout(() => setSavedStatus(null), 3000)
     } catch {
@@ -700,12 +1098,16 @@ export default function EstimateTab({ projectId }) {
     }
   }
 
-  // Load previously saved estimate
+  // Load previously saved estimate (restores pricing)
   const handleLoadSaved = async () => {
     try {
       const res = await estimateAPI.load(projectId)
       if (res.data?.estimate_data) {
-        setEstimate(res.data.estimate_data)
+        const loaded = res.data.estimate_data
+        if (loaded.pricing) {
+          setPricing({ ...DEFAULT_PRICING, ...loaded.pricing })
+        }
+        setEstimate(loaded)
         setSavedStatus('Loaded saved estimate')
         setTimeout(() => setSavedStatus(null), 3000)
       }
@@ -874,7 +1276,12 @@ export default function EstimateTab({ projectId }) {
 
           {/* Page Content */}
           {activePage === 'summary' && (
-            <ProjectSummaryPage summary={estimate.summary} estimate={{ ...estimate, consolidated_materials: taggedMaterials }} />
+            <ProjectSummaryPage
+              summary={estimate.summary}
+              totals={computeTotals(taggedMaterials, estimate.summary, pricing)}
+              pricing={pricing}
+              onPricingChange={setPricing}
+            />
           )}
           {activePage === 'flat' && (
             <FlatRoofMaterialsPage materials={taggedMaterials} onUpdateMaterial={handleUpdateMaterial} />
@@ -884,6 +1291,15 @@ export default function EstimateTab({ projectId }) {
           )}
           {activePage === 'labor' && (
             <LaborPage summary={estimate.summary} />
+          )}
+          {activePage === 'recap' && (
+            <RecapPage
+              materials={taggedMaterials}
+              summary={estimate.summary}
+              pricing={pricing}
+              onPricingChange={setPricing}
+              onUpdateMaterial={handleUpdateMaterial}
+            />
           )}
         </div>
       )}
