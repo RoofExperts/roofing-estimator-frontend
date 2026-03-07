@@ -127,7 +127,7 @@ function ProjectSummaryPage({ summary, totals, pricing, onPricingChange }) {
     ...(t.equipmentTotal > 0 ? [{ label: 'Equipment:', value: t.equipmentTotal }] : []),
     { label: 'SUBTOTAL:', value: t.subtotal, bold: true },
     null,
-    { label: `Profit Markup (${pricing.markupPct}%):`, value: t.markup },
+    { label: `Profit Margin (${pricing.markupPct}%):`, value: t.markup },
     { label: 'SUBTOTAL WITH MARKUP:', value: t.subtotalWithMarkup, bold: true },
     null,
   ]
@@ -135,13 +135,13 @@ function ProjectSummaryPage({ summary, totals, pricing, onPricingChange }) {
   // Tax rows
   if (pricing.taxMode === 'group') {
     if (pricing.materialTaxPct > 0) {
-      costRows.push({ label: `Material Tax (${pricing.materialTaxPct}%):`, value: t.materialTotal * (1 + t.markupPct) * (pricing.materialTaxPct / 100) })
+      costRows.push({ label: `Material Tax (${pricing.materialTaxPct}%):`, value: t.materialWithMargin * (pricing.materialTaxPct / 100) })
     }
     if (pricing.laborTaxPct > 0) {
-      costRows.push({ label: `Labor Tax (${pricing.laborTaxPct}%):`, value: t.laborTotal * (1 + t.markupPct) * (pricing.laborTaxPct / 100) })
+      costRows.push({ label: `Labor Tax (${pricing.laborTaxPct}%):`, value: t.laborWithMargin * (pricing.laborTaxPct / 100) })
     }
     if (pricing.equipmentTaxPct > 0) {
-      costRows.push({ label: `Equipment Tax (${pricing.equipmentTaxPct}%):`, value: t.equipmentTotal * (1 + t.markupPct) * (pricing.equipmentTaxPct / 100) })
+      costRows.push({ label: `Equipment Tax (${pricing.equipmentTaxPct}%):`, value: t.equipmentWithMargin * (pricing.equipmentTaxPct / 100) })
     }
     costRows.push({ label: 'TOTAL TAX:', value: t.tax, bold: true })
   } else {
@@ -642,7 +642,7 @@ function RecapPage({ materials, summary, pricing, onPricingChange }) {
               {/* Editable Markup */}
               <tr className="border-b border-gray-100">
                 <td className="py-2.5 text-gray-600">
-                  Profit Markup{' '}
+                  Profit Margin{' '}
                   <span className="inline-flex items-center">
                     (<EditableCell
                       value={pricing.markupPct}
@@ -718,7 +718,7 @@ function RecapPage({ materials, summary, pricing, onPricingChange }) {
                           </span>
                         </span>
                         <span className="font-mono text-gray-800 text-sm">
-                          {fmt(t.materialTotal * (1 + t.markupPct) * (pricing.materialTaxPct / 100))}
+                          {fmt(t.materialWithMargin * (pricing.materialTaxPct / 100))}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
@@ -734,7 +734,7 @@ function RecapPage({ materials, summary, pricing, onPricingChange }) {
                           </span>
                         </span>
                         <span className="font-mono text-gray-800 text-sm">
-                          {fmt(t.laborTotal * (1 + t.markupPct) * (pricing.laborTaxPct / 100))}
+                          {fmt(t.laborWithMargin * (pricing.laborTaxPct / 100))}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
@@ -750,7 +750,7 @@ function RecapPage({ materials, summary, pricing, onPricingChange }) {
                           </span>
                         </span>
                         <span className="font-mono text-gray-800 text-sm">
-                          {fmt(t.equipmentTotal * (1 + t.markupPct) * (pricing.equipmentTaxPct / 100))}
+                          {fmt(t.equipmentWithMargin * (pricing.equipmentTaxPct / 100))}
                         </span>
                       </div>
                       <div className="flex justify-between items-center pt-1 border-t border-gray-200 font-medium">
@@ -876,16 +876,23 @@ function computeTotals(materials, summary, pricing) {
   const equipmentTotal = summary?.equipment_total || 0
   const subtotal = materialTotal + laborTotal + equipmentTotal
 
-  const markupPct = (pricing.markupPct || 0) / 100
-  const markup = subtotal * markupPct
-  const subtotalWithMarkup = subtotal + markup
+  // Profit margin formula: selling_price = cost / (1 - margin%)
+  // e.g. 25% margin: $100 / 0.75 = $133.33 (profit is $33.33, which is 25% of $133.33)
+  const marginPct = (pricing.markupPct || 0) / 100
+  const divisor = Math.max(0.01, 1 - marginPct)  // prevent divide by zero
+  const subtotalWithMarkup = subtotal / divisor
+  const markup = subtotalWithMarkup - subtotal
 
-  // Tax calculation
+  // Tax calculation — apply to post-margin amounts
+  const materialWithMargin = materialTotal / divisor
+  const laborWithMargin = laborTotal / divisor
+  const equipmentWithMargin = equipmentTotal / divisor
+
   let tax = 0
   if (pricing.taxMode === 'group') {
-    tax += materialTotal * (1 + markupPct) * ((pricing.materialTaxPct || 0) / 100)
-    tax += laborTotal * (1 + markupPct) * ((pricing.laborTaxPct || 0) / 100)
-    tax += equipmentTotal * (1 + markupPct) * ((pricing.equipmentTaxPct || 0) / 100)
+    tax += materialWithMargin * ((pricing.materialTaxPct || 0) / 100)
+    tax += laborWithMargin * ((pricing.laborTaxPct || 0) / 100)
+    tax += equipmentWithMargin * ((pricing.equipmentTaxPct || 0) / 100)
   } else {
     tax = subtotalWithMarkup * ((pricing.projectTaxPct || 0) / 100)
   }
@@ -901,7 +908,8 @@ function computeTotals(materials, summary, pricing) {
   return {
     flatTotal, metalTotal, materialTotal,
     laborTotal, equipmentTotal, subtotal,
-    markupPct, markup, subtotalWithMarkup,
+    marginPct, markup, subtotalWithMarkup,
+    materialWithMargin, laborWithMargin, equipmentWithMargin,
     tax, subtotalWithTax,
     bondPct, bond, grandTotal,
   }
