@@ -203,75 +203,79 @@ function FlatRoofMaterialsPage({ materials }) {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
+        <table className="min-w-full text-sm table-fixed">
+          <colgroup>
+            <col className="w-10" />
+            <col />
+            <col className="w-28" />
+            <col className="w-16" />
+            <col className="w-16" />
+            <col className="w-28" />
+            <col className="w-32" />
+          </colgroup>
           <thead>
             <tr className="bg-gray-100 border-b border-gray-300">
-              <th className="px-3 py-3 text-left text-xs font-bold text-gray-600 w-10">#</th>
+              <th className="px-3 py-3 text-left text-xs font-bold text-gray-600">#</th>
               <th className="px-3 py-3 text-left text-xs font-bold text-gray-600">Description</th>
-              <th className="px-3 py-3 text-right text-xs font-bold text-gray-600 w-24">Item Count</th>
-              <th className="px-3 py-3 text-right text-xs font-bold text-gray-600 w-16">Qty</th>
-              <th className="px-3 py-3 text-center text-xs font-bold text-gray-600 w-16">Unit</th>
-              <th className="px-3 py-3 text-right text-xs font-bold text-gray-600 w-24">Unit Cost</th>
-              <th className="px-3 py-3 text-right text-xs font-bold text-gray-600 w-28">Extended Cost</th>
+              <th className="px-3 py-3 text-right text-xs font-bold text-gray-600">Item Count</th>
+              <th className="px-3 py-3 text-right text-xs font-bold text-gray-600">Qty</th>
+              <th className="px-3 py-3 text-center text-xs font-bold text-gray-600">Unit</th>
+              <th className="px-3 py-3 text-right text-xs font-bold text-gray-600">Unit Cost</th>
+              <th className="px-3 py-3 text-right text-xs font-bold text-gray-600">Extended Cost</th>
             </tr>
           </thead>
-          <tbody>
-            {sectionOrder.map((sectionLabel) => {
-              const items = sections[sectionLabel]
-              return (
-                <tbody key={sectionLabel}>
-                  {/* Section Header */}
-                  <tr className="bg-blue-50 border-t-2 border-blue-200">
-                    <td colSpan={7} className="px-3 py-2.5 text-xs font-bold text-blue-800 uppercase tracking-wider">
-                      {sectionLabel}
-                    </td>
-                  </tr>
-                  {items.map((mat) => {
-                    lineNum++
-                    const hasPurchaseUnit = mat.purchase_unit && mat.units_per_purchase
-                    const displayName = mat.product_name || mat.material_name
-                    // If purchase unit info exists, show purchase qty and unit
-                    const purchaseQty = mat.purchase_qty || Math.ceil(mat.total_qty)
-                    const displayUnit = hasPurchaseUnit ? mat.purchase_unit : fmtUnit(mat.unit)
-                    // Item count = total base qty (for reference)
-                    const itemCount = hasPurchaseUnit ? fmtNum(mat.total_qty) + ' ' + fmtUnit(mat.unit) : null
-                    // Unit cost per purchase unit
-                    const perUnitCost = hasPurchaseUnit
-                      ? (mat.units_per_purchase * (mat.unit_cost + (mat.labor_cost || 0)))
-                      : (mat.unit_cost + (mat.labor_cost || 0))
-                    const extCost = mat.purchase_cost || mat.total_cost
+          {sectionOrder.map((sectionLabel) => {
+            const items = sections[sectionLabel]
+            return (
+              <tbody key={sectionLabel}>
+                {/* Section Header */}
+                <tr className="bg-blue-50 border-t-2 border-blue-200">
+                  <td colSpan={7} className="px-3 py-2.5 text-xs font-bold text-blue-800 uppercase tracking-wider">
+                    {sectionLabel}
+                  </td>
+                </tr>
+                {items.map((mat) => {
+                  lineNum++
+                  const hasPurchaseUnit = mat.purchase_unit && mat.units_per_purchase
+                  const displayName = mat.product_name || mat.material_name
+                  const purchaseQty = mat.purchase_qty || Math.ceil(mat.total_qty)
+                  const displayUnit = hasPurchaseUnit ? mat.purchase_unit : fmtUnit(mat.unit)
+                  const itemCount = hasPurchaseUnit ? fmtNum(mat.total_qty) + ' ' + fmtUnit(mat.unit) : null
+                  const perUnitCost = hasPurchaseUnit
+                    ? (mat.units_per_purchase * (mat.unit_cost + (mat.labor_cost || 0)))
+                    : (mat.unit_cost + (mat.labor_cost || 0))
+                  const extCost = mat.purchase_cost || mat.total_cost
 
-                    return (
-                      <tr key={mat.material_name + mat.unit} className="border-t border-gray-100 hover:bg-gray-50">
-                        <td className="px-3 py-2.5 text-gray-500 font-mono text-xs">{lineNum}</td>
-                        <td className="px-3 py-2.5">
-                          <div className="font-medium text-gray-800">{displayName}</div>
-                          {hasPurchaseUnit && (
-                            <div className="text-xs text-gray-400">
-                              {fmtNum(mat.units_per_purchase)} {fmtUnit(mat.unit)} per {mat.purchase_unit.toLowerCase()}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-mono text-xs text-gray-500">
-                          {itemCount || '—'}
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-mono font-semibold text-gray-800">
-                          {fmtNum(purchaseQty)}
-                        </td>
-                        <td className="px-3 py-2.5 text-center text-gray-600">{displayUnit}</td>
-                        <td className="px-3 py-2.5 text-right font-mono text-gray-700">
-                          {perUnitCost > 0 ? fmt(perUnitCost) : '—'}
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-mono font-semibold text-gray-900">
-                          {extCost > 0 ? fmt(extCost) : '—'}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              )
-            })}
-          </tbody>
+                  return (
+                    <tr key={mat.material_name + mat.unit} className="border-t border-gray-100 hover:bg-gray-50">
+                      <td className="px-3 py-2.5 text-gray-500 font-mono text-xs w-10">{lineNum}</td>
+                      <td className="px-3 py-2.5">
+                        <div className="font-medium text-gray-800">{displayName}</div>
+                        {hasPurchaseUnit && (
+                          <div className="text-xs text-gray-400">
+                            {fmtNum(mat.units_per_purchase)} {fmtUnit(mat.unit)} per {mat.purchase_unit.toLowerCase()}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono text-xs text-gray-500 w-24">
+                        {itemCount || '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono font-semibold text-gray-800 w-16">
+                        {fmtNum(purchaseQty)}
+                      </td>
+                      <td className="px-3 py-2.5 text-center text-gray-600 w-16">{displayUnit}</td>
+                      <td className="px-3 py-2.5 text-right font-mono text-gray-700 w-24">
+                        {perUnitCost > 0 ? fmt(perUnitCost) : '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono font-semibold text-gray-900 w-28">
+                        {extCost > 0 ? fmt(extCost) : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            )
+          })}
           <tfoot>
             <tr className="bg-gray-100 border-t-2 border-gray-400">
               <td colSpan={6} className="px-3 py-3 text-right text-sm font-bold text-gray-700 uppercase">
@@ -432,32 +436,30 @@ function LaborPage({ summary }) {
               <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-28">Total</th>
             </tr>
           </thead>
-          <tbody>
-            {laborRows.map(({ section, items }) => (
-              <tbody key={section}>
-                <tr className="bg-blue-50 border-t-2 border-blue-200">
-                  <td colSpan={6} className="px-4 py-2.5 text-xs font-bold text-blue-800 uppercase tracking-wider">
-                    {section}
-                  </td>
-                </tr>
-                {items.map((item) => {
-                  lineNum++
-                  return (
-                    <tr key={lineNum} className="border-t border-gray-100 hover:bg-gray-50">
-                      <td className="px-4 py-2.5 text-gray-500 font-mono text-xs">{lineNum}</td>
-                      <td className="px-4 py-2.5 font-medium text-gray-800">{item.desc}</td>
-                      <td className="px-4 py-2.5 text-right font-mono text-gray-700">{item.qty}</td>
-                      <td className="px-4 py-2.5 text-center text-gray-600">{item.unit}</td>
-                      <td className="px-4 py-2.5 text-right font-mono text-gray-700">{item.rate}</td>
-                      <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-900">
-                        {item.total > 0 ? fmt(item.total) : '—'}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            ))}
-          </tbody>
+          {laborRows.map(({ section, items }) => (
+            <tbody key={section}>
+              <tr className="bg-blue-50 border-t-2 border-blue-200">
+                <td colSpan={6} className="px-4 py-2.5 text-xs font-bold text-blue-800 uppercase tracking-wider">
+                  {section}
+                </td>
+              </tr>
+              {items.map((item) => {
+                lineNum++
+                return (
+                  <tr key={lineNum} className="border-t border-gray-100 hover:bg-gray-50">
+                    <td className="px-4 py-2.5 text-gray-500 font-mono text-xs w-10">{lineNum}</td>
+                    <td className="px-4 py-2.5 font-medium text-gray-800">{item.desc}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-gray-700 w-20">{item.qty}</td>
+                    <td className="px-4 py-2.5 text-center text-gray-600 w-16">{item.unit}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-gray-700 w-24">{item.rate}</td>
+                    <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-900 w-28">
+                      {item.total > 0 ? fmt(item.total) : '—'}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          ))}
           <tfoot>
             <tr className="bg-gray-100 border-t-2 border-gray-400">
               <td colSpan={5} className="px-4 py-3 text-right text-sm font-bold text-gray-700 uppercase">
