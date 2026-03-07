@@ -5,6 +5,18 @@ import PdfMarkupViewer from './PdfMarkupViewer'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://roof-estimator-backend.onrender.com'
 
+const COMMON_SCALES = [
+  { label: '1/16" = 1\'-0"', notation: '1/16 inch = 1 foot', ratio: 192 },
+  { label: '3/32" = 1\'-0"', notation: '3/32 inch = 1 foot', ratio: 128 },
+  { label: '1/8" = 1\'-0"', notation: '1/8 inch = 1 foot', ratio: 96 },
+  { label: '3/16" = 1\'-0"', notation: '3/16 inch = 1 foot', ratio: 64 },
+  { label: '1/4" = 1\'-0"', notation: '1/4 inch = 1 foot', ratio: 48 },
+  { label: '3/8" = 1\'-0"', notation: '3/8 inch = 1 foot', ratio: 32 },
+  { label: '1/2" = 1\'-0"', notation: '1/2 inch = 1 foot', ratio: 24 },
+  { label: '3/4" = 1\'-0"', notation: '3/4 inch = 1 foot', ratio: 16 },
+  { label: '1" = 1\'-0"', notation: '1 inch = 1 foot', ratio: 12 },
+]
+
 export default function PlansTab({ projectId }) {
   const [plans, setPlans] = useState([])
   const [loading, setLoading] = useState(true)
@@ -19,6 +31,7 @@ export default function PlansTab({ projectId }) {
   const [viewingPlan, setViewingPlan] = useState(null)
   const [viewMode, setViewMode] = useState('markup') // 'markup' or 'basic'
   const [progressMap, setProgressMap] = useState({}) // planId -> { progress_message, detected_scale }
+  const [settingScale, setSettingScale] = useState(null) // planId currently changing scale
 
   const fetchPlans = async () => {
     try {
@@ -153,6 +166,30 @@ export default function PlansTab({ projectId }) {
     }
   }
 
+  const handleScaleChange = async (planId, scaleValue, e) => {
+    e.stopPropagation()
+    setSettingScale(planId)
+    try {
+      if (scaleValue === 'auto') {
+        // Clear manual override
+        await planAPI.setScale(planId, { clear: true })
+      } else {
+        const scale = COMMON_SCALES.find(s => String(s.ratio) === scaleValue)
+        if (scale) {
+          await planAPI.setScale(planId, {
+            scale_notation: scale.notation,
+            scale_ratio: scale.ratio,
+          })
+        }
+      }
+      await fetchPlans()
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to set scale')
+    } finally {
+      setSettingScale(null)
+    }
+  }
+
   const getPlanProxyUrl = (plan) => {
     return `${API_BASE_URL}/plans/${plan.id}/file`
   }
@@ -238,7 +275,32 @@ export default function PlansTab({ projectId }) {
                 </svg>
                 <div>
                   <p className="text-sm font-medium text-gray-900">{plan.file_name || plan.filename || `Plan #${plan.id}`}</p>
-                  <p className="text-xs text-gray-500">{plan.page_count || '?'} pages</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs text-gray-500">{plan.page_count || '?'} pages</span>
+                    {plan.upload_status === 'completed' && (
+                      <>
+                        <span className="text-xs text-gray-300">|</span>
+                        <span className="text-xs text-gray-500">Scale:</span>
+                        <select
+                          value={plan.manual_scale_ratio ? String(plan.manual_scale_ratio) : 'auto'}
+                          onChange={(e) => handleScaleChange(plan.id, e.target.value, e)}
+                          onClick={(e) => e.stopPropagation()}
+                          disabled={settingScale === plan.id}
+                          className="text-xs border border-gray-300 rounded px-1.5 py-0.5 bg-white text-gray-700 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                        >
+                          <option value="auto">
+                            Auto{plan.detected_scale ? ` (${plan.detected_scale})` : ''}
+                          </option>
+                          {COMMON_SCALES.map(s => (
+                            <option key={s.ratio} value={String(s.ratio)}>{s.label}</option>
+                          ))}
+                        </select>
+                        {plan.manual_scale && (
+                          <span className="text-xs text-amber-600 font-medium">Manual</span>
+                        )}
+                      </>
+                    )}
+                  </div>
                   {/* Live progress indicator */}
                   {['processing', 'pending'].includes(plan.upload_status || plan.status) && progressMap[plan.id] && (
                     <div className="mt-1">
@@ -273,11 +335,11 @@ export default function PlansTab({ projectId }) {
                   </svg>
                   {viewingPlan?.id === plan.id ? 'Hide' : 'View & Markup'}
                 </button>
-                {['failed', 'pending'].includes(plan.upload_status || plan.status) && (
+                {['failed', 'pending', 'completed'].includes(plan.upload_status || plan.status) && (
                   <button
                     onClick={(e) => handleReanalyze(plan.id, e)}
                     className="inline-flex items-center px-2.5 py-1.5 text-xs rounded-lg bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100"
-                    title="Re-analyze this plan"
+                    title="Re-analyze this plan with current scale setting"
                   >
                     Re-Analyze
                   </button>

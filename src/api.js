@@ -111,6 +111,8 @@ export const planAPI = {
   regenerateConditions: (id) => api.post(`/api/v1/plan-files/${id}/regenerate-conditions`),
   reanalyze: (id) => api.post(`/api/v1/plan-files/${id}/reanalyze`),
   delete: (id) => api.delete(`/api/v1/plan-files/${id}`),
+  setScale: (id, data) => api.put(`/api/v1/plan-files/${id}/scale`, data),
+  commonScales: () => api.get(`/api/v1/common-scales`),
   // Markups
   saveMarkups: (planId, markups) => api.post(`/api/v1/plan-files/${planId}/markups`, { markups }),
   getMarkups: (planId) => api.get(`/api/v1/plan-files/${planId}/markups`),
