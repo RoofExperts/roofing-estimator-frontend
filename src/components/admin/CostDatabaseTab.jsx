@@ -1,0 +1,520 @@
+import React, { useState, useEffect, useMemo } from 'react'
+import { costDatabaseAPI } from '../../api'
+
+const CATEGORIES = ['All', 'membrane', 'insulation', 'fastener', 'flashing', 'adhesive', 'accessory', 'sealant']
+const UNITS = ['sqft', 'lnft', 'each', 'gallon', 'roll']
+
+const fmtMoney = (v) => v != null ? `$${Number(v).toFixed(2)}` : '—'
+
+// ── Category badge colors ──
+const catColor = {
+  membrane: 'bg-blue-100 text-blue-800',
+  insulation: 'bg-yellow-100 text-yellow-800',
+  fastener: 'bg-gray-100 text-gray-800',
+  flashing: 'bg-orange-100 text-orange-800',
+  adhesive: 'bg-green-100 text-green-800',
+  accessory: 'bg-purple-100 text-purple-800',
+  sealant: 'bg-pink-100 text-pink-800',
+}
+
+// ── Add/Edit Modal ──
+function ItemModal({ item, onSave, onClose }) {
+  const isEdit = !!item?.id
+  const [form, setForm] = useState({
+    material_name: item?.material_name || '',
+    manufacturer: item?.manufacturer || '',
+    material_category: item?.material_category || 'membrane',
+    unit: item?.unit || 'sqft',
+    unit_cost: item?.unit_cost ?? 0,
+    labor_cost_per_unit: item?.labor_cost_per_unit ?? 0,
+    purchase_unit: item?.purchase_unit || '',
+    units_per_purchase: item?.units_per_purchase ?? '',
+    product_name: item?.product_name || '',
+  })
+  const [saving, setSaving] = useState(false)
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const payload = {
+        ...form,
+        unit_cost: parseFloat(form.unit_cost) || 0,
+        labor_cost_per_unit: parseFloat(form.labor_cost_per_unit) || 0,
+        units_per_purchase: form.units_per_purchase ? parseFloat(form.units_per_purchase) : null,
+        purchase_unit: form.purchase_unit || null,
+        product_name: form.product_name || null,
+      }
+      if (isEdit) {
+        await costDatabaseAPI.update(item.id, payload)
+      } else {
+        await costDatabaseAPI.create(payload)
+      }
+      onSave()
+    } catch (err) {
+      console.error('Save failed:', err)
+      alert('Failed to save: ' + (err.response?.data?.detail || err.message))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const Field = ({ label, field, type = 'text', options, placeholder, half }) => (
+    <div className={half ? 'col-span-1' : 'col-span-2'}>
+      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      {options ? (
+        <select
+          value={form[field]}
+          onChange={e => setForm({ ...form, [field]: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+        >
+          {options.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      ) : (
+        <input
+          type={type}
+          value={form[field]}
+          onChange={e => setForm({ ...form, [field]: e.target.value })}
+          placeholder={placeholder}
+          step={type === 'number' ? '0.01' : undefined}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+        />
+      )}
+    </div>
+  )
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">{isEdit ? 'Edit' : 'Add'} Cost Database Item</h3>
+        </div>
+        <div className="px-6 py-4 grid grid-cols-2 gap-4">
+          <Field label="Material Name" field="material_name" placeholder="e.g. TPO 60mil Membrane" />
+          <Field label="Manufacturer" field="manufacturer" half placeholder="e.g. Carlisle" />
+          <Field label="Category" field="material_category" half options={CATEGORIES.filter(c => c !== 'All')} />
+          <Field label="Unit" field="unit" half options={UNITS} />
+          <Field label="Unit Cost ($)" field="unit_cost" type="number" half />
+          <Field label="Labor Cost ($)" field="labor_cost_per_unit" type="number" half />
+          <Field label="Purchase Unit" field="purchase_unit" half placeholder="e.g. Roll, Box, Pail" />
+          <Field label="Units per Purchase" field="units_per_purchase" type="number" half placeholder="e.g. 1000" />
+          <Field label="Product Name" field="product_name" placeholder="e.g. TPO 60mil 10x100 Roll" />
+        </div>
+        <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+          >Cancel</button>
+          <button
+            onClick={handleSave}
+            disabled={saving || !form.material_name.trim()}
+            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50"
+          >{saving ? 'Saving...' : isEdit ? 'Update' : 'Add Item'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Inline Edit Row ──
+function InlineEditRow({ item, onSave, onCancel }) {
+  const [cost, setCost] = useState(item.unit_cost ?? 0)
+  const [labor, setLabor] = useState(item.labor_cost_per_unit ?? 0)
+  const [pu, setPu] = useState(item.purchase_unit || '')
+  const [upp, setUpp] = useState(item.units_per_purchase ?? '')
+  const [pn, setPn] = useState(item.product_name || '')
+  const [saving, setSaving] = useState(false)
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await costDatabaseAPI.update(item.id, {
+        unit_cost: parseFloat(cost) || 0,
+        labor_cost_per_unit: parseFloat(labor) || 0,
+        purchase_unit: pu || null,
+        units_per_purchase: upp ? parseFloat(upp) : null,
+        product_name: pn || null,
+      })
+      onSave()
+    } catch (err) {
+      console.error('Update failed:', err)
+      alert('Failed to update: ' + (err.response?.data?.detail || err.message))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <tr className="bg-blue-50 border-b border-blue-200">
+      <td className="px-3 py-2 text-sm text-gray-900">{item.material_name}</td>
+      <td className="px-3 py-2 text-sm text-gray-600">{item.manufacturer || '—'}</td>
+      <td className="px-3 py-2">
+        <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${catColor[item.material_category] || 'bg-gray-100 text-gray-800'}`}>
+          {item.material_category}
+        </span>
+      </td>
+      <td className="px-3 py-2 text-sm text-gray-600">{item.unit}</td>
+      <td className="px-3 py-2">
+        <input type="number" step="0.01" value={cost} onChange={e => setCost(e.target.value)}
+          className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-right focus:ring-2 focus:ring-primary-500" />
+      </td>
+      <td className="px-3 py-2">
+        <input type="number" step="0.01" value={labor} onChange={e => setLabor(e.target.value)}
+          className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-right focus:ring-2 focus:ring-primary-500" />
+      </td>
+      <td className="px-3 py-2">
+        <input type="text" value={pu} onChange={e => setPu(e.target.value)}
+          className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary-500" placeholder="Box" />
+      </td>
+      <td className="px-3 py-2">
+        <input type="number" value={upp} onChange={e => setUpp(e.target.value)}
+          className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-right focus:ring-2 focus:ring-primary-500" placeholder="500" />
+      </td>
+      <td className="px-3 py-2">
+        <input type="text" value={pn} onChange={e => setPn(e.target.value)}
+          className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary-500" />
+      </td>
+      <td className="px-3 py-2">
+        <div className="flex gap-1">
+          <button onClick={handleSave} disabled={saving}
+            className="px-2 py-1 text-xs font-medium text-white bg-green-600 rounded hover:bg-green-700 disabled:opacity-50">
+            {saving ? '...' : 'Save'}
+          </button>
+          <button onClick={onCancel}
+            className="px-2 py-1 text-xs font-medium text-gray-600 bg-gray-200 rounded hover:bg-gray-300">
+            Cancel
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+// ── Main Component ──
+export default function CostDatabaseTab() {
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('All')
+  const [manufacturerFilter, setManufacturerFilter] = useState('All')
+  const [editingId, setEditingId] = useState(null)
+  const [showModal, setShowModal] = useState(false)
+  const [modalItem, setModalItem] = useState(null)
+  const [message, setMessage] = useState(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [sortField, setSortField] = useState('material_name')
+  const [sortDir, setSortDir] = useState('asc')
+
+  const loadItems = async () => {
+    setLoading(true)
+    try {
+      const resp = await costDatabaseAPI.list()
+      setItems(resp.data)
+    } catch (err) {
+      console.error('Failed to load cost database:', err)
+      showMsg('Failed to load cost database', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { loadItems() }, [])
+
+  const showMsg = (text, type = 'success') => {
+    setMessage({ text, type })
+    setTimeout(() => setMessage(null), 4000)
+  }
+
+  // Derived data
+  const manufacturers = useMemo(() => {
+    const set = new Set(items.map(i => i.manufacturer).filter(Boolean))
+    return ['All', ...Array.from(set).sort()]
+  }, [items])
+
+  const filtered = useMemo(() => {
+    let result = items
+    if (categoryFilter !== 'All') {
+      result = result.filter(i => i.material_category === categoryFilter)
+    }
+    if (manufacturerFilter !== 'All') {
+      result = result.filter(i => i.manufacturer === manufacturerFilter)
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      result = result.filter(i =>
+        i.material_name.toLowerCase().includes(q) ||
+        (i.manufacturer || '').toLowerCase().includes(q) ||
+        (i.product_name || '').toLowerCase().includes(q)
+      )
+    }
+    // Sort
+    result = [...result].sort((a, b) => {
+      let av = a[sortField] ?? ''
+      let bv = b[sortField] ?? ''
+      if (typeof av === 'string') av = av.toLowerCase()
+      if (typeof bv === 'string') bv = bv.toLowerCase()
+      if (av < bv) return sortDir === 'asc' ? -1 : 1
+      if (av > bv) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
+    return result
+  }, [items, categoryFilter, manufacturerFilter, search, sortField, sortDir])
+
+  // Stats
+  const stats = useMemo(() => {
+    const total = items.length
+    const needsPricing = items.filter(i => !i.unit_cost || i.unit_cost === 0).length
+    const cats = new Set(items.map(i => i.material_category)).size
+    const mfrs = new Set(items.filter(i => i.manufacturer).map(i => i.manufacturer)).size
+    return { total, needsPricing, cats, mfrs }
+  }, [items])
+
+  const handleDelete = async (item) => {
+    try {
+      await costDatabaseAPI.delete(item.id)
+      showMsg(`Deleted "${item.material_name}"`)
+      setDeleteConfirm(null)
+      loadItems()
+    } catch (err) {
+      console.error('Delete failed:', err)
+      showMsg('Failed to delete item', 'error')
+    }
+  }
+
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDir('asc')
+    }
+  }
+
+  const SortHeader = ({ field, children, className = '' }) => (
+    <th
+      onClick={() => handleSort(field)}
+      className={`px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none ${className}`}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        {sortField === field && (
+          <span className="text-primary-500">{sortDir === 'asc' ? '▲' : '▼'}</span>
+        )}
+      </div>
+    </th>
+  )
+
+  return (
+    <div>
+      {/* Toast */}
+      {message && (
+        <div className={`mb-4 px-4 py-3 rounded-md text-sm font-medium ${
+          message.type === 'error' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+        }`}>
+          {message.text}
+        </div>
+      )}
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
+          <div className="text-xs text-gray-500 mt-1">Total Items</div>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="text-2xl font-bold text-gray-900">{stats.mfrs}</div>
+          <div className="text-xs text-gray-500 mt-1">Manufacturers</div>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="text-2xl font-bold text-gray-900">{stats.cats}</div>
+          <div className="text-xs text-gray-500 mt-1">Categories</div>
+        </div>
+        <div className={`rounded-lg border p-4 ${stats.needsPricing > 0 ? 'bg-yellow-50 border-yellow-300' : 'bg-green-50 border-green-300'}`}>
+          <div className={`text-2xl font-bold ${stats.needsPricing > 0 ? 'text-yellow-700' : 'text-green-700'}`}>
+            {stats.needsPricing}
+          </div>
+          <div className={`text-xs mt-1 ${stats.needsPricing > 0 ? 'text-yellow-600' : 'text-green-600'}`}>Need Pricing</div>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
+        <div className="flex flex-wrap gap-3 items-center">
+          {/* Search */}
+          <div className="flex-1 min-w-[200px]">
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search by name, manufacturer, or product..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+          </div>
+          {/* Category Filter */}
+          <select
+            value={categoryFilter}
+            onChange={e => setCategoryFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary-500"
+          >
+            {CATEGORIES.map(c => (
+              <option key={c} value={c}>{c === 'All' ? 'All Categories' : c}</option>
+            ))}
+          </select>
+          {/* Manufacturer Filter */}
+          <select
+            value={manufacturerFilter}
+            onChange={e => setManufacturerFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary-500"
+          >
+            {manufacturers.map(m => (
+              <option key={m} value={m}>{m === 'All' ? 'All Manufacturers' : m}</option>
+            ))}
+          </select>
+          {/* Add Button */}
+          <button
+            onClick={() => { setModalItem(null); setShowModal(true) }}
+            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Item
+          </button>
+        </div>
+        <div className="mt-2 text-xs text-gray-500">
+          Showing {filtered.length} of {items.length} items
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <SortHeader field="material_name">Name</SortHeader>
+                <SortHeader field="manufacturer">Manufacturer</SortHeader>
+                <SortHeader field="material_category">Category</SortHeader>
+                <SortHeader field="unit">Unit</SortHeader>
+                <SortHeader field="unit_cost" className="text-right">Unit $</SortHeader>
+                <SortHeader field="labor_cost_per_unit" className="text-right">Labor $</SortHeader>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purch Unit</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qty/Purch</th>
+                <SortHeader field="product_name">Product Name</SortHeader>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {loading ? (
+                <tr>
+                  <td colSpan={10} className="px-6 py-12 text-center">
+                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600 mr-2"></div>
+                    Loading cost database...
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="px-6 py-12 text-center text-gray-500">
+                    No items found matching your filters.
+                  </td>
+                </tr>
+              ) : filtered.map(item => (
+                editingId === item.id ? (
+                  <InlineEditRow
+                    key={item.id}
+                    item={item}
+                    onSave={() => { setEditingId(null); showMsg('Item updated'); loadItems() }}
+                    onCancel={() => setEditingId(null)}
+                  />
+                ) : (
+                  <tr key={item.id} className={`hover:bg-gray-50 ${(!item.unit_cost || item.unit_cost === 0) ? 'bg-yellow-50' : ''}`}>
+                    <td className="px-3 py-2 text-sm font-medium text-gray-900 max-w-[250px] truncate" title={item.material_name}>
+                      {item.material_name}
+                    </td>
+                    <td className="px-3 py-2 text-sm text-gray-600">{item.manufacturer || '—'}</td>
+                    <td className="px-3 py-2">
+                      <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${catColor[item.material_category] || 'bg-gray-100 text-gray-800'}`}>
+                        {item.material_category}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-sm text-gray-600">{item.unit}</td>
+                    <td className={`px-3 py-2 text-sm text-right ${item.unit_cost ? 'text-gray-900' : 'text-red-500 font-medium'}`}>
+                      {fmtMoney(item.unit_cost)}
+                    </td>
+                    <td className="px-3 py-2 text-sm text-right text-gray-600">{fmtMoney(item.labor_cost_per_unit)}</td>
+                    <td className="px-3 py-2 text-sm text-gray-600">{item.purchase_unit || '—'}</td>
+                    <td className="px-3 py-2 text-sm text-gray-600 text-right">{item.units_per_purchase || '—'}</td>
+                    <td className="px-3 py-2 text-sm text-gray-500 max-w-[200px] truncate" title={item.product_name || ''}>
+                      {item.product_name || '—'}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => setEditingId(item.id)}
+                          className="p-1 text-gray-400 hover:text-primary-600 rounded"
+                          title="Quick edit pricing"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => { setModalItem(item); setShowModal(true) }}
+                          className="p-1 text-gray-400 hover:text-blue-600 rounded"
+                          title="Full edit"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirm(item)}
+                          className="p-1 text-gray-400 hover:text-red-600 rounded"
+                          title="Delete"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Delete Confirmation */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Item?</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Are you sure you want to delete <strong>{deleteConfirm.material_name}</strong>? This will deactivate it in the cost database.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setDeleteConfirm(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200">
+                Cancel
+              </button>
+              <button onClick={() => handleDelete(deleteConfirm)}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add/Edit Modal */}
+      {showModal && (
+        <ItemModal
+          item={modalItem}
+          onClose={() => { setShowModal(false); setModalItem(null) }}
+          onSave={() => { setShowModal(false); setModalItem(null); showMsg(modalItem ? 'Item updated' : 'Item added'); loadItems() }}
+        />
+      )}
+    </div>
+  )
+}

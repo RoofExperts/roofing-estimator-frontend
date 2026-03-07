@@ -185,4 +185,30 @@ export const referenceAPI = {
   },
 }
 
+// ============= COST DATABASE =============
+export const costDatabaseAPI = {
+  list: (category = '', includeInactive = false) => {
+    const params = new URLSearchParams()
+    if (category) params.append('material_category', category)
+    if (!includeInactive) params.append('is_active', 'true')
+    return api.get(`/api/v1/cost-database?${params.toString()}`)
+  },
+  get: (id) => api.get(`/api/v1/cost-database/${id}`),
+  create: (data) => api.post('/api/v1/cost-database', data),
+  update: (id, data) => api.put(`/api/v1/cost-database/${id}`, data),
+  delete: (id) => api.delete(`/api/v1/cost-database/${id}`),
+  search: (q = '', category = '') => {
+    const params = new URLSearchParams()
+    if (q) params.append('q', q)
+    if (category) params.append('category', category)
+    return api.get(`/api/v1/cost-database/search?${params.toString()}`)
+  },
+  uploadPricing: (formData) => {
+    return api.post('/api/v1/cost-database/upload-pricing', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+  resync: (updatePricing = false) => api.post(`/api/v1/cost-database/resync?update_pricing=${updatePricing}`),
+}
+
 export default api
