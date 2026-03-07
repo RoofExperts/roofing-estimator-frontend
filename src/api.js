@@ -109,6 +109,7 @@ export const planAPI = {
   deleteExtraction: (id) => api.delete(`/api/v1/extractions/${id}`),
   regenerateConditions: (id) => api.post(`/api/v1/plan-files/${id}/regenerate-conditions`),
   reanalyze: (id) => api.post(`/api/v1/plan-files/${id}/reanalyze`),
+  delete: (id) => api.delete(`/api/v1/plan-files/${id}`),
   // Markups
   saveMarkups: (planId, markups) => api.post(`/api/v1/plan-files/${planId}/markups`, { markups }),
   getMarkups: (planId) => api.get(`/api/v1/plan-files/${planId}/markups`),

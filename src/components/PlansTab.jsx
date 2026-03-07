@@ -72,7 +72,8 @@ export default function PlansTab({ projectId }) {
       await planAPI.upload(projectId, file)
       await fetchPlans()
     } catch (err) {
-      setError('Failed to upload plan')
+      const detail = err.response?.data?.detail || err.message || 'Unknown error'
+      setError(`Upload failed: ${detail}`)
     } finally {
       setUploading(false)
     }
@@ -119,6 +120,29 @@ export default function PlansTab({ projectId }) {
       alert('Conditions regenerated successfully!')
     } catch (err) {
       setError('Failed to regenerate conditions')
+    }
+  }
+
+  const handleDeletePlan = async (planId, e) => {
+    e.stopPropagation()
+    if (!confirm('Delete this plan and all its extractions/conditions?')) return
+    try {
+      await planAPI.delete(planId)
+      if (viewingPlan?.id === planId) setViewingPlan(null)
+      if (expandedPlan === planId) setExpandedPlan(null)
+      await fetchPlans()
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to delete plan')
+    }
+  }
+
+  const handleReanalyze = async (planId, e) => {
+    e.stopPropagation()
+    try {
+      await planAPI.reanalyze(planId)
+      await fetchPlans()
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to re-analyze plan')
     }
   }
 
@@ -227,7 +251,7 @@ export default function PlansTab({ projectId }) {
                   )}
                 </div>
               </div>
-              <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-2">
                 <button
                   onClick={(e) => { e.stopPropagation(); setViewingPlan(viewingPlan?.id === plan.id ? null : plan) }}
                   className={`inline-flex items-center px-3 py-1.5 text-sm rounded-lg transition-colors ${
@@ -242,7 +266,30 @@ export default function PlansTab({ projectId }) {
                   </svg>
                   {viewingPlan?.id === plan.id ? 'Hide' : 'View & Markup'}
                 </button>
+                {['failed', 'pending'].includes(plan.upload_status || plan.status) && (
+                  <button
+                    onClick={(e) => handleReanalyze(plan.id, e)}
+                    className="inline-flex items-center px-2.5 py-1.5 text-xs rounded-lg bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100"
+                    title="Re-analyze this plan"
+                  >
+                    Re-Analyze
+                  </button>
+                )}
+                <button
+                  onClick={(e) => handleDeletePlan(plan.id, e)}
+                  className="inline-flex items-center px-2 py-1.5 text-xs rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700"
+                  title="Delete this plan"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
                 <StatusBadge status={plan.upload_status || plan.status} />
+                {plan.error_message && (
+                  <span className="text-xs text-red-500 max-w-xs truncate" title={plan.error_message}>
+                    {plan.error_message}
+                  </span>
+                )}
                 <svg className={`w-5 h-5 text-gray-400 transform transition-transform ${expandedPlan === plan.id ? 'rotate-180' : ''}`}
                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
