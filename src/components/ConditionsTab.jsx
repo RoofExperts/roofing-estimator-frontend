@@ -175,10 +175,29 @@ function CostDbSearchInput({ category, onSelect, placeholder = 'Search materials
 }
 
 
+// Category-specific labels for what "coverage_rate" means
+const COVERAGE_LABELS = {
+  fastener:  'Per Board',
+  adhesive:  'Gal / SQ',
+  sealant:   'Tubes / 100 LF',
+  membrane:  'Coverage Rate',
+  insulation:'Coverage Rate',
+  flashing:  'Coverage Rate',
+  metal:     'Coverage Rate',
+  accessory: 'Coverage Rate',
+  misc:      'Coverage Rate',
+}
+
+const SwapIcon = ({ className = 'w-4 h-4' }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+  </svg>
+)
+
 // ============================================================================
-// MATERIAL ITEM — Mini-card for each material inside a condition card
+// MATERIAL ITEM — Product-selector card for each material in a condition
 // ============================================================================
-function MaterialItem({ material, index, totalCount, conditionMeasurement, onUpdate, onDelete, onMove }) {
+function MaterialItem({ material, index, totalCount, conditionMeasurement, onUpdate, onDelete, onMove, onSwapProduct }) {
   const [editing, setEditing] = useState(false)
   const [values, setValues] = useState({})
   const [saving, setSaving] = useState(false)
@@ -210,154 +229,214 @@ function MaterialItem({ material, index, totalCount, conditionMeasurement, onUpd
     await onUpdate(material.id, { is_included: !material.is_included })
   }
 
-  // Compute quantity: measurement * coverage * (1 + waste)
-  const meas = conditionMeasurement || 0
+  // Use enriched qty from backend if available, otherwise compute
+  const qtyCalc = material.qty_calculated || 0
+  const unitCost = material.unit_cost || 0
+  const laborCost = material.labor_cost_per_unit || 0
+  const extCost = material.extended_cost || 0
   const coverage = material.coverage_rate || 1
   const waste = material.waste_factor || 0
-  const computedQty = material.override_quantity || (meas * coverage * (1 + waste))
-  const unitCost = material.unit_cost || 0
-  const lineTotal = computedQty * unitCost
+  const isFastener = material.material_category === 'fastener'
+  const coverageLabel = COVERAGE_LABELS[material.material_category] || 'Coverage Rate'
+  const hasProduct = !!material.cost_database_item_id
+
+  // Category badge colors
+  const catColors = {
+    membrane: 'bg-blue-100 text-blue-800',
+    insulation: 'bg-purple-100 text-purple-800',
+    fastener: 'bg-orange-100 text-orange-800',
+    adhesive: 'bg-teal-100 text-teal-800',
+    flashing: 'bg-amber-100 text-amber-800',
+    metal: 'bg-gray-200 text-gray-800',
+    sealant: 'bg-cyan-100 text-cyan-800',
+    accessory: 'bg-pink-100 text-pink-800',
+    coverboard: 'bg-yellow-100 text-yellow-800',
+    base_sheet: 'bg-lime-100 text-lime-800',
+    misc: 'bg-slate-100 text-slate-700',
+  }
+  const catBadge = catColors[material.material_category] || 'bg-gray-100 text-gray-700'
 
   return (
-    <div className={`group relative border rounded-lg p-3 transition-all ${
+    <div className={`group relative border rounded-lg transition-all ${
       !material.is_included
-        ? 'bg-gray-50 border-gray-200 opacity-50'
+        ? 'bg-gray-50 border-gray-200 opacity-40'
         : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm'
     }`}>
-      <div className="flex items-start gap-3">
-        {/* Toggle checkbox */}
-        <div className="pt-0.5">
-          <input
-            type="checkbox"
-            checked={material.is_included}
-            onChange={toggleIncluded}
-            className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
-          />
-        </div>
+      {/* Row 1: Material header with toggle, name, category, product info, and actions */}
+      <div className="flex items-center gap-3 px-3 py-2.5 border-b border-gray-100">
+        {/* Toggle */}
+        <input
+          type="checkbox"
+          checked={material.is_included}
+          onChange={toggleIncluded}
+          className="h-4 w-4 text-primary-600 rounded border-gray-300 focus:ring-primary-500 flex-shrink-0"
+        />
 
-        {/* Main content */}
+        {/* Category badge */}
+        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded ${catBadge} flex-shrink-0 uppercase tracking-wide`}>
+          {material.material_category}
+        </span>
+
+        {/* Material Name + Product Details */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-medium text-sm text-gray-900">{material.material_name}</span>
-            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{material.material_category}</span>
-            {material.cost_database_item_id ? (
-              <span className="inline-flex items-center text-[10px] font-medium text-green-700 bg-green-50 px-1.5 py-0.5 rounded-full">
-                <svg className="w-2.5 h-2.5 mr-0.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                Linked
-              </span>
-            ) : unitCost > 0 ? (
-              <span className="inline-flex items-center text-[10px] font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-full">~ Fuzzy</span>
-            ) : (
-              <span className="inline-flex items-center text-[10px] font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full">No price</span>
-            )}
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-sm text-gray-900 truncate">{material.material_name}</span>
           </div>
-
-          {/* Stats row */}
-          {!editing && (
-            <div className="flex items-center gap-4 mt-1.5 text-xs text-gray-500">
-              <span>Coverage: <span className="font-mono text-gray-700">{coverage}</span></span>
-              <span>Waste: <span className="font-mono text-gray-700">{(waste * 100).toFixed(0)}%</span></span>
-              <span>Qty: <span className="font-mono text-gray-700">{fmtNum(computedQty)}</span> {fmtUnit(material.unit)}</span>
-              {unitCost > 0 && <span>@ {fmtMoney(unitCost)}</span>}
-              {lineTotal > 0 && <span className="font-medium text-gray-700">= {fmtMoney(lineTotal)}</span>}
-            </div>
-          )}
-
-          {/* Edit form */}
-          {editing && (
-            <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2">
-              <div>
-                <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Coverage Rate</label>
-                <input
-                  type="number"
-                  step="0.001"
-                  value={values.coverage_rate}
-                  onChange={(e) => setValues({ ...values, coverage_rate: e.target.value })}
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Waste Factor</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={values.waste_factor}
-                  onChange={(e) => setValues({ ...values, waste_factor: e.target.value })}
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Override Qty</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={values.override_quantity}
-                  onChange={(e) => setValues({ ...values, override_quantity: e.target.value })}
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                  placeholder="Auto"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Notes</label>
-                <input
-                  type="text"
-                  value={values.notes}
-                  onChange={(e) => setValues({ ...values, notes: e.target.value })}
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                  placeholder="Optional"
-                />
-              </div>
-              <div className="col-span-2 md:col-span-4 flex justify-end gap-2 mt-1">
-                <button onClick={() => setEditing(false)} className="px-3 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">
-                  Cancel
-                </button>
-                <button onClick={save} disabled={saving} className="px-3 py-1 text-xs text-white bg-primary-600 hover:bg-primary-700 rounded disabled:opacity-50">
-                  {saving ? 'Saving...' : 'Save'}
-                </button>
-              </div>
+          {/* Product line: manufacturer + product name from cost DB */}
+          {(material.manufacturer || material.product_name) && (
+            <div className="text-xs text-gray-500 mt-0.5 truncate">
+              {material.manufacturer && <span>{material.manufacturer}</span>}
+              {material.manufacturer && material.product_name && <span> — </span>}
+              {material.product_name && <span>{material.product_name}</span>}
             </div>
           )}
         </div>
 
-        {/* Right side actions */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Reorder arrows */}
-          <div className="flex flex-col">
+        {/* Product link status + change button */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {hasProduct ? (
             <button
-              onClick={() => onMove(index, 'up')}
-              disabled={index === 0}
-              className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Move up"
+              onClick={() => onSwapProduct(material)}
+              className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 px-2 py-1 rounded-md transition-colors"
+              title="Change to a different product"
             >
-              <ArrowUpIcon className="w-3.5 h-3.5" />
+              <SwapIcon className="w-3 h-3" />
+              Change
             </button>
+          ) : unitCost > 0 ? (
             <button
-              onClick={() => onMove(index, 'down')}
-              disabled={index === totalCount - 1}
-              className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Move down"
+              onClick={() => onSwapProduct(material)}
+              className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-1 rounded-md font-medium transition-colors"
+              title="Link to a specific product"
             >
-              <ArrowDownIcon className="w-3.5 h-3.5" />
+              <SwapIcon className="w-3 h-3" />
+              Link Product
             </button>
-          </div>
-          {!editing && (
+          ) : (
             <button
-              onClick={startEdit}
-              className="p-1 text-gray-400 hover:text-primary-600 transition-colors"
-              title="Edit material parameters"
+              onClick={() => onSwapProduct(material)}
+              className="inline-flex items-center gap-1 text-xs text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-1 rounded-md font-semibold transition-colors animate-pulse"
+              title="Select a product from cost database"
             >
-              <PencilIcon className="w-3.5 h-3.5" />
+              <SearchIcon className="w-3 h-3" />
+              Select Product
             </button>
           )}
-          <button
-            onClick={() => onDelete(material.id)}
-            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-            title="Remove material"
-          >
+        </div>
+
+        {/* Reorder + delete */}
+        <div className="flex items-center gap-0.5 flex-shrink-0 border-l border-gray-100 pl-2 ml-1">
+          <div className="flex flex-col">
+            <button onClick={() => onMove(index, 'up')} disabled={index === 0}
+              className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-20 disabled:cursor-not-allowed" title="Move up">
+              <ArrowUpIcon className="w-3 h-3" />
+            </button>
+            <button onClick={() => onMove(index, 'down')} disabled={index === totalCount - 1}
+              className="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-20 disabled:cursor-not-allowed" title="Move down">
+              <ArrowDownIcon className="w-3 h-3" />
+            </button>
+          </div>
+          <button onClick={() => onDelete(material.id)}
+            className="p-1 text-gray-300 hover:text-red-500 transition-colors" title="Remove material">
             <TrashIcon className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
+
+      {/* Row 2: Parameters and cost — only show when included */}
+      {material.is_included && (
+        <div className="px-3 py-2">
+          {!editing ? (
+            <div className="flex items-center justify-between">
+              {/* Left: editable params */}
+              <div className="flex items-center gap-4 text-xs text-gray-600">
+                <button onClick={startEdit} className="flex items-center gap-3 hover:bg-gray-50 rounded px-2 py-1 -mx-2 transition-colors group"
+                  title="Click to edit parameters">
+                  <span>{coverageLabel}: <span className="font-mono font-medium text-gray-800">{coverage}</span></span>
+                  <span className="text-gray-300">|</span>
+                  <span>Waste: <span className="font-mono font-medium text-gray-800">{(waste * 100).toFixed(0)}%</span></span>
+                  {material.override_quantity && (
+                    <>
+                      <span className="text-gray-300">|</span>
+                      <span>Override Qty: <span className="font-mono font-medium text-amber-700">{fmtNum(material.override_quantity)}</span></span>
+                    </>
+                  )}
+                  <PencilIcon className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+              </div>
+
+              {/* Right: qty + cost summary */}
+              <div className="flex items-center gap-3 text-xs">
+                <span className="text-gray-500">
+                  Qty: <span className="font-mono font-medium text-gray-800">{fmtNum(qtyCalc)}</span> {fmtUnit(material.unit)}
+                </span>
+                {unitCost > 0 && (
+                  <>
+                    <span className="text-gray-400">@</span>
+                    <span className="text-gray-500">{fmtMoney(unitCost)}</span>
+                    {laborCost > 0 && <span className="text-gray-400">+{fmtMoney(laborCost)} labor</span>}
+                  </>
+                )}
+                {extCost > 0 && (
+                  <span className="font-semibold text-gray-900 bg-gray-100 px-2 py-0.5 rounded">{fmtMoney(extCost)}</span>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Edit form — parameters */
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-[11px] font-medium text-gray-600 mb-1">{coverageLabel}</label>
+                  <input
+                    type="number" step="0.001" value={values.coverage_rate}
+                    onChange={(e) => setValues({ ...values, coverage_rate: e.target.value })}
+                    className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-primary-500 focus:border-primary-500"
+                  />
+                  {isFastener && (
+                    <p className="text-[10px] text-gray-400 mt-0.5">e.g., 5 fasteners per board of insulation</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-gray-600 mb-1">Waste %</label>
+                  <div className="relative">
+                    <input
+                      type="number" step="1" value={Math.round(values.waste_factor * 100)}
+                      onChange={(e) => setValues({ ...values, waste_factor: parseFloat(e.target.value) / 100 || 0 })}
+                      className="w-full px-2.5 py-1.5 pr-7 border border-gray-300 rounded-md text-sm focus:ring-primary-500 focus:border-primary-500"
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">%</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-gray-600 mb-1">Override Quantity</label>
+                  <input
+                    type="number" step="0.01" value={values.override_quantity}
+                    onChange={(e) => setValues({ ...values, override_quantity: e.target.value })}
+                    className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="Auto-calculate"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-gray-600 mb-1">Notes</label>
+                  <input
+                    type="text" value={values.notes}
+                    onChange={(e) => setValues({ ...values, notes: e.target.value })}
+                    className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="Optional notes"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setEditing(false)} className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-md">Cancel</button>
+                <button onClick={save} disabled={saving} className="px-3 py-1.5 text-xs text-white bg-primary-600 hover:bg-primary-700 rounded-md disabled:opacity-50">
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -374,20 +453,15 @@ function ConditionCard({ condition, onRefresh, onToggleActive, isSystemCondition
   const [editingDesc, setEditingDesc] = useState(false)
   const [descValue, setDescValue] = useState(condition.description || '')
   const [addingMaterial, setAddingMaterial] = useState(false)
+  const [swapMaterial, setSwapMaterial] = useState(null)
   const [error, setError] = useState('')
 
   const materials = condition.materials || []
   const includedMats = materials.filter(m => m.is_included)
   const colors = getColors(condition.condition_type)
 
-  // Total material cost for this condition
-  const totalCost = includedMats.reduce((sum, m) => {
-    const meas = condition.measurement_value || 0
-    const coverage = m.coverage_rate || 1
-    const waste = m.waste_factor || 0
-    const qty = m.override_quantity || (meas * coverage * (1 + waste))
-    return sum + (qty * (m.unit_cost || 0))
-  }, 0)
+  // Total material cost for this condition — use backend enriched extended_cost
+  const totalCost = includedMats.reduce((sum, m) => sum + (m.extended_cost || 0), 0)
 
   // --- Material CRUD ---
   const handleUpdateMaterial = async (materialId, data) => {
@@ -431,6 +505,18 @@ function ConditionCard({ condition, onRefresh, onToggleActive, isSystemCondition
       await conditionAPI.reorderMaterials(condition.id, items)
       onRefresh()
     } catch { setError('Failed to reorder') }
+  }
+
+  const handleSwapProduct = async (costItem) => {
+    if (!swapMaterial) return
+    try {
+      await conditionAPI.updateMaterial(swapMaterial.id, {
+        material_name: costItem.material_name,
+        cost_database_item_id: costItem.id,
+      })
+      setSwapMaterial(null)
+      onRefresh()
+    } catch { setError('Failed to swap product') }
   }
 
   // --- Inline measurement edit ---
@@ -576,6 +662,7 @@ function ConditionCard({ condition, onRefresh, onToggleActive, isSystemCondition
                     onUpdate={handleUpdateMaterial}
                     onDelete={handleDeleteMaterial}
                     onMove={handleMoveMaterial}
+                    onSwapProduct={(m) => setSwapMaterial(m)}
                   />
                 ))}
               </div>
@@ -612,6 +699,40 @@ function ConditionCard({ condition, onRefresh, onToggleActive, isSystemCondition
               )}
             </div>
           </div>
+
+          {/* Product Swap / Select Modal */}
+          {swapMaterial && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setSwapMaterial(null)}>
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
+                <div className="px-5 py-4 border-b border-gray-200">
+                  <h3 className="text-base font-semibold text-gray-900">
+                    {swapMaterial.cost_database_item_id ? 'Change Product' : 'Select Product'}
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    {swapMaterial.cost_database_item_id
+                      ? <>Replace <span className="font-medium">{swapMaterial.material_name}</span> with a different product</>
+                      : <>Choose a product from your cost database for <span className="font-medium">{swapMaterial.material_name}</span></>
+                    }
+                  </p>
+                </div>
+                <div className="p-5">
+                  <CostDbSearchInput
+                    category={swapMaterial.material_category}
+                    placeholder={`Search ${swapMaterial.material_category} products...`}
+                    onSelect={handleSwapProduct}
+                  />
+                </div>
+                <div className="px-5 py-3 border-t border-gray-100 flex justify-end">
+                  <button
+                    onClick={() => setSwapMaterial(null)}
+                    className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
