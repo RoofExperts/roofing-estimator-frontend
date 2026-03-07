@@ -7,6 +7,58 @@ const fmtNum = (v) => v != null ? Number(v).toLocaleString(undefined, { maximumF
 const UNIT_LABELS = { sqft: 'SF', lnft: 'LF', each: 'EA', gallon: 'GAL', roll: 'Roll', box: 'Box' }
 const fmtUnit = (u) => UNIT_LABELS[u] || (u || '').toUpperCase()
 
+
+// ============================================================================
+// INLINE EDITABLE CELL
+// ============================================================================
+function EditableCell({ value, onSave, formatter, className, prefix, suffix, type = 'number' }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+
+  const handleStart = () => {
+    setDraft(value)
+    setEditing(true)
+  }
+
+  const handleSave = () => {
+    setEditing(false)
+    const parsed = parseFloat(draft)
+    if (!isNaN(parsed) && parsed !== value) {
+      onSave(parsed)
+    }
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') handleSave()
+    if (e.key === 'Escape') setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <input
+        type={type}
+        step="any"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={handleKeyDown}
+        autoFocus
+        className={`w-full bg-white border border-blue-400 rounded px-1.5 py-0.5 text-right font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 ${className || ''}`}
+      />
+    )
+  }
+
+  return (
+    <span
+      onClick={handleStart}
+      className={`cursor-pointer hover:bg-blue-50 hover:text-blue-700 rounded px-1 py-0.5 transition-colors border border-transparent hover:border-blue-200 ${className || ''}`}
+      title="Click to edit"
+    >
+      {prefix}{formatter ? formatter(value) : value}{suffix}
+    </span>
+  )
+}
+
 // Category display order and labels
 const CATEGORY_ORDER = [
   'membrane', 'adhesive', 'sealant', 'base_sheet',
@@ -176,7 +228,7 @@ function ProjectSummaryPage({ summary, estimate }) {
 // ============================================================================
 // PAGE 2: FLAT ROOF MATERIALS
 // ============================================================================
-function FlatRoofMaterialsPage({ materials }) {
+function FlatRoofMaterialsPage({ materials, onUpdateMaterial }) {
   // Filter out metals (they go on Page 3)
   const flatMats = (materials || []).filter(m => !isMetalItem(m))
 
@@ -207,7 +259,8 @@ function FlatRoofMaterialsPage({ materials }) {
           <colgroup>
             <col className="w-10" />
             <col />
-            <col className="w-28" />
+            <col className="w-24" />
+            <col className="w-16" />
             <col className="w-16" />
             <col className="w-16" />
             <col className="w-28" />
@@ -218,6 +271,7 @@ function FlatRoofMaterialsPage({ materials }) {
               <th className="px-3 py-3 text-left text-xs font-bold text-gray-600">#</th>
               <th className="px-3 py-3 text-left text-xs font-bold text-gray-600">Description</th>
               <th className="px-3 py-3 text-right text-xs font-bold text-gray-600">Item Count</th>
+              <th className="px-3 py-3 text-center text-xs font-bold text-gray-600">Waste %</th>
               <th className="px-3 py-3 text-right text-xs font-bold text-gray-600">Qty</th>
               <th className="px-3 py-3 text-center text-xs font-bold text-gray-600">Unit</th>
               <th className="px-3 py-3 text-right text-xs font-bold text-gray-600">Unit Cost</th>
@@ -230,7 +284,7 @@ function FlatRoofMaterialsPage({ materials }) {
               <tbody key={sectionLabel}>
                 {/* Section Header */}
                 <tr className="bg-blue-50 border-t-2 border-blue-200">
-                  <td colSpan={7} className="px-3 py-2.5 text-xs font-bold text-blue-800 uppercase tracking-wider">
+                  <td colSpan={8} className="px-3 py-2.5 text-xs font-bold text-blue-800 uppercase tracking-wider">
                     {sectionLabel}
                   </td>
                 </tr>
@@ -245,10 +299,14 @@ function FlatRoofMaterialsPage({ materials }) {
                     ? (mat.units_per_purchase * (mat.unit_cost + (mat.labor_cost || 0)))
                     : (mat.unit_cost + (mat.labor_cost || 0))
                   const extCost = mat.purchase_cost || mat.total_cost
+                  const wastePct = mat.waste_pct || 0
+
+                  // Find the original index in the full materials array for callbacks
+                  const matKey = mat._idx
 
                   return (
                     <tr key={mat.material_name + mat.unit} className="border-t border-gray-100 hover:bg-gray-50">
-                      <td className="px-3 py-2.5 text-gray-500 font-mono text-xs w-10">{lineNum}</td>
+                      <td className="px-3 py-2.5 text-gray-500 font-mono text-xs">{lineNum}</td>
                       <td className="px-3 py-2.5">
                         <div className="font-medium text-gray-800">{displayName}</div>
                         {hasPurchaseUnit && (
@@ -257,17 +315,30 @@ function FlatRoofMaterialsPage({ materials }) {
                           </div>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 text-right font-mono text-xs text-gray-500 w-24">
+                      <td className="px-3 py-2.5 text-right font-mono text-xs text-gray-500">
                         {itemCount || '—'}
                       </td>
-                      <td className="px-3 py-2.5 text-right font-mono font-semibold text-gray-800 w-16">
+                      <td className="px-3 py-2.5 text-center">
+                        <EditableCell
+                          value={Math.round(wastePct * 100)}
+                          onSave={(v) => onUpdateMaterial(matKey, 'waste_pct', v / 100)}
+                          suffix="%"
+                          className="text-xs font-mono"
+                        />
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-mono font-semibold text-gray-800">
                         {fmtNum(purchaseQty)}
                       </td>
-                      <td className="px-3 py-2.5 text-center text-gray-600 w-16">{displayUnit}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-gray-700 w-24">
-                        {perUnitCost > 0 ? fmt(perUnitCost) : '—'}
+                      <td className="px-3 py-2.5 text-center text-gray-600">{displayUnit}</td>
+                      <td className="px-3 py-2.5 text-right">
+                        <EditableCell
+                          value={parseFloat((mat.unit_cost || 0).toFixed(2))}
+                          onSave={(v) => onUpdateMaterial(matKey, 'unit_cost', v)}
+                          prefix="$"
+                          className="font-mono text-gray-700"
+                        />
                       </td>
-                      <td className="px-3 py-2.5 text-right font-mono font-semibold text-gray-900 w-28">
+                      <td className="px-3 py-2.5 text-right font-mono font-semibold text-gray-900">
                         {extCost > 0 ? fmt(extCost) : '—'}
                       </td>
                     </tr>
@@ -278,7 +349,7 @@ function FlatRoofMaterialsPage({ materials }) {
           })}
           <tfoot>
             <tr className="bg-gray-100 border-t-2 border-gray-400">
-              <td colSpan={6} className="px-3 py-3 text-right text-sm font-bold text-gray-700 uppercase">
+              <td colSpan={7} className="px-3 py-3 text-right text-sm font-bold text-gray-700 uppercase">
                 Page 2 Total:
               </td>
               <td className="px-3 py-3 text-right font-mono font-bold text-gray-900 text-base">
@@ -296,7 +367,7 @@ function FlatRoofMaterialsPage({ materials }) {
 // ============================================================================
 // PAGE 3: ROOF RELATED METALS
 // ============================================================================
-function RoofMetalsPage({ materials }) {
+function RoofMetalsPage({ materials, onUpdateMaterial }) {
   const metals = (materials || []).filter(m => isMetalItem(m))
 
   if (metals.length === 0) {
@@ -310,7 +381,7 @@ function RoofMetalsPage({ materials }) {
     )
   }
 
-  const pageTotal = metals.reduce((s, m) => s + (m.total_cost || 0), 0)
+  const pageTotal = metals.reduce((s, m) => s + (m.purchase_cost || m.total_cost || 0), 0)
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -324,6 +395,7 @@ function RoofMetalsPage({ materials }) {
             <tr className="bg-gray-100 border-b border-gray-300">
               <th className="px-4 py-3 text-left text-xs font-bold text-gray-600 w-10">#</th>
               <th className="px-4 py-3 text-left text-xs font-bold text-gray-600">Description</th>
+              <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 w-16">Waste %</th>
               <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-20">Qty</th>
               <th className="px-4 py-3 text-center text-xs font-bold text-gray-600 w-16">Unit</th>
               <th className="px-4 py-3 text-right text-xs font-bold text-gray-600 w-24">Unit Cost</th>
@@ -340,6 +412,8 @@ function RoofMetalsPage({ materials }) {
                 ? (mat.units_per_purchase * (mat.unit_cost + (mat.labor_cost || 0)))
                 : (mat.unit_cost + (mat.labor_cost || 0))
               const extCost = mat.purchase_cost || mat.total_cost
+              const wastePct = mat.waste_pct || 0
+              const matKey = mat._idx
 
               return (
                 <tr key={mat.material_name} className="border-t border-gray-100 hover:bg-gray-50">
@@ -352,9 +426,24 @@ function RoofMetalsPage({ materials }) {
                       </div>
                     )}
                   </td>
+                  <td className="px-4 py-2.5 text-center">
+                    <EditableCell
+                      value={Math.round(wastePct * 100)}
+                      onSave={(v) => onUpdateMaterial(matKey, 'waste_pct', v / 100)}
+                      suffix="%"
+                      className="text-xs font-mono"
+                    />
+                  </td>
                   <td className="px-4 py-2.5 text-right font-mono text-gray-700">{fmtNum(purchaseQty)}</td>
                   <td className="px-4 py-2.5 text-center text-gray-600">{displayUnit}</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-gray-700">{perUnitCost > 0 ? fmt(perUnitCost) : '—'}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <EditableCell
+                      value={parseFloat((mat.unit_cost || 0).toFixed(2))}
+                      onSave={(v) => onUpdateMaterial(matKey, 'unit_cost', v)}
+                      prefix="$"
+                      className="font-mono text-gray-700"
+                    />
+                  </td>
                   <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-900">{extCost > 0 ? fmt(extCost) : '—'}</td>
                 </tr>
               )
@@ -362,7 +451,7 @@ function RoofMetalsPage({ materials }) {
           </tbody>
           <tfoot>
             <tr className="bg-gray-100 border-t-2 border-gray-400">
-              <td colSpan={5} className="px-4 py-3 text-right text-sm font-bold text-gray-700 uppercase">
+              <td colSpan={6} className="px-4 py-3 text-right text-sm font-bold text-gray-700 uppercase">
                 Page 3 Total:
               </td>
               <td className="px-4 py-3 text-right font-mono font-bold text-gray-900 text-base">
@@ -591,7 +680,51 @@ export default function EstimateTab({ projectId }) {
     }
   }
 
+  // Handle inline edits to a consolidated material row
+  const handleUpdateMaterial = (idx, field, value) => {
+    if (!estimate?.consolidated_materials) return
+
+    const updated = { ...estimate }
+    const mats = [...updated.consolidated_materials]
+    const mat = { ...mats[idx] }
+
+    if (field === 'unit_cost') {
+      mat.unit_cost = value
+    } else if (field === 'waste_pct') {
+      // Recalculate total_qty from base_qty and new waste %
+      const baseQty = mat.base_qty || (mat.total_qty / (1 + (mat.waste_pct || 0)))
+      mat.waste_pct = value
+      mat.total_qty = Math.round(baseQty * (1 + value) * 100) / 100
+    }
+
+    // Recalculate derived values
+    const unitCost = mat.unit_cost || 0
+    const laborCost = mat.labor_cost || 0
+    mat.total_cost = Math.round(mat.total_qty * (unitCost + laborCost) * 100) / 100
+
+    const pUnit = mat.purchase_unit
+    const pPer = mat.units_per_purchase
+    if (pUnit && pPer && pPer > 0) {
+      mat.purchase_qty = Math.ceil(mat.total_qty / pPer)
+      mat.purchase_cost = Math.round(mat.purchase_qty * pPer * (unitCost + laborCost) * 100) / 100
+    } else {
+      mat.purchase_qty = Math.ceil(mat.total_qty)
+      mat.purchase_cost = mat.total_cost
+    }
+
+    mats[idx] = mat
+    updated.consolidated_materials = mats
+    setEstimate(updated)
+  }
+
   if (loading) return <LoadingSpinner />
+
+  // Tag each material with its index so sub-pages can call back
+  const taggedMaterials = estimate?.consolidated_materials?.map((m, i) => ({
+    ...m,
+    _idx: i,
+    base_qty: m.base_qty || (m.total_qty / (1 + (m.waste_pct || 0)))
+  }))
 
   return (
     <div>
@@ -707,13 +840,13 @@ export default function EstimateTab({ projectId }) {
 
           {/* Page Content */}
           {activePage === 'summary' && (
-            <ProjectSummaryPage summary={estimate.summary} estimate={estimate} />
+            <ProjectSummaryPage summary={estimate.summary} estimate={{ ...estimate, consolidated_materials: taggedMaterials }} />
           )}
           {activePage === 'flat' && (
-            <FlatRoofMaterialsPage materials={estimate.consolidated_materials} />
+            <FlatRoofMaterialsPage materials={taggedMaterials} onUpdateMaterial={handleUpdateMaterial} />
           )}
           {activePage === 'metals' && (
-            <RoofMetalsPage materials={estimate.consolidated_materials} />
+            <RoofMetalsPage materials={taggedMaterials} onUpdateMaterial={handleUpdateMaterial} />
           )}
           {activePage === 'labor' && (
             <LaborPage summary={estimate.summary} />
