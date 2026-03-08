@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { conditionAPI, referenceAPI, planAPI, projectAPI, systemAPI } from '../api'
+import { useRef } from 'react'
 import { LoadingSpinner, ErrorDisplay } from './common'
 import Modal from './Modal'
 
@@ -451,7 +452,7 @@ function MaterialItem({ material, index, totalCount, conditionMeasurement, onUpd
 // ============================================================================
 // CONDITION CARD — Expandable card for one condition with material stack
 // ============================================================================
-function ConditionCard({ condition, onRefresh, onToggleActive, isSystemCondition }) {
+function ConditionCard({ condition, onRefresh, onToggleActive, isSystemCondition, systemData }) {
   const [expanded, setExpanded] = useState(false)
   const [editingMeasurement, setEditingMeasurement] = useState(false)
   const [measValue, setMeasValue] = useState(condition.measurement_value)
@@ -572,7 +573,7 @@ function ConditionCard({ condition, onRefresh, onToggleActive, isSystemCondition
             {TYPE_LABELS[condition.condition_type] || condition.condition_type}
           </span>
 
-          {/* Label / Description */}
+          {/* Label / Description + Buildup Stack for field conditions */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               {condition.label && condition.label !== condition.condition_type && (
@@ -582,6 +583,9 @@ function ConditionCard({ condition, onRefresh, onToggleActive, isSystemCondition
                 <span className="text-xs text-gray-500 truncate">{condition.description}</span>
               )}
             </div>
+            {condition.condition_type === 'field' && systemData && (
+              <BuildupStack systemData={systemData} />
+            )}
           </div>
 
           {/* Measurement value — click to edit */}
@@ -887,6 +891,297 @@ function PlanAnalysisSection({ projectId, onConditionsChanged }) {
 
 
 // ============================================================================
+// SYSTEM SPEC PANEL — Collapsible roof system configuration
+// ============================================================================
+const SYSTEM_TYPES = ['TPO', 'EPDM', 'PVC', 'ModBit', 'BUR', 'StandingSeam']
+const MEMBRANE_OPTIONS = ['45 mil', '60 mil', '80 mil', '90 mil (fleeceback)', '110 mil (fleeceback)', '135 mil (fleeceback)']
+const FIELD_ATTACHMENT_OPTIONS = ['Mechanically Fastened', 'Rhinobond', 'Adhesive', 'Low Rise Foam']
+const WALL_FLASHING_OPTIONS = ['45 mil', '60 mil', '80 mil']
+const COVERBOARD_ATTACHMENT_OPTIONS = ['Mechanically Fastened', 'Low Rise Foam']
+const INSULATION_ATTACHMENT_OPTIONS = ['Mechanically Fastened', 'Gang Fastened', 'Low Rise Foam']
+const VAPOR_BOARD_ATTACHMENT_OPTIONS = ['Mechanically Fastened', 'Gang Fastened', 'Low Rise Foam']
+
+const DEFAULT_SYSTEM = {
+  name: 'Roof Area 1', system_type: 'TPO', manufacturer: '',
+  membrane_thickness: '', field_attachment: '', wall_flashing_thickness: '',
+  has_coverboard: false, coverboard_attachment: '',
+  has_top_insulation: false, top_insulation_attachment: '',
+  has_bottom_insulation: false, bottom_insulation_attachment: '',
+  has_vapor_barrier: false, has_vapor_barrier_board: false, vapor_barrier_board_attachment: '',
+}
+
+function SystemSpecPanel({ projectId, systemData, onSystemChange, onSystemTypeChange }) {
+  const [expanded, setExpanded] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const saveTimer = useRef(null)
+  const sys = systemData || DEFAULT_SYSTEM
+
+  // Build summary line for collapsed state
+  const summaryParts = []
+  if (sys.system_type) summaryParts.push(sys.system_type)
+  if (sys.membrane_thickness) summaryParts.push(sys.membrane_thickness)
+  if (sys.field_attachment) summaryParts.push(sys.field_attachment)
+  if (sys.manufacturer) summaryParts.push(sys.manufacturer)
+  const layerParts = []
+  if (sys.has_vapor_barrier) layerParts.push('Vapor Barrier')
+  const insulCount = (sys.has_bottom_insulation ? 1 : 0) + (sys.has_top_insulation ? 1 : 0)
+  if (insulCount > 0) layerParts.push(`${insulCount}-Layer Insulation`)
+  if (sys.has_coverboard) layerParts.push('Coverboard')
+  if (layerParts.length > 0) summaryParts.push(layerParts.join(' + '))
+  const summary = summaryParts.join(' | ') || 'Not configured'
+
+  const handleChange = (field, value) => {
+    const updated = { ...sys, [field]: value }
+    // Clear child fields when parent toggled off
+    if (field === 'has_coverboard' && !value) updated.coverboard_attachment = ''
+    if (field === 'has_top_insulation' && !value) updated.top_insulation_attachment = ''
+    if (field === 'has_bottom_insulation' && !value) updated.bottom_insulation_attachment = ''
+    if (field === 'has_vapor_barrier' && !value) {
+      updated.has_vapor_barrier_board = false
+      updated.vapor_barrier_board_attachment = ''
+    }
+    if (field === 'has_vapor_barrier_board' && !value) updated.vapor_barrier_board_attachment = ''
+
+    // If system type changed, also update the project-level system type
+    if (field === 'system_type' && onSystemTypeChange) {
+      onSystemTypeChange(value)
+    }
+
+    onSystemChange(updated)
+
+    // Debounced auto-save
+    clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => autoSave(updated), 800)
+  }
+
+  const autoSave = async (data) => {
+    setSaving(true)
+    try {
+      const payload = {
+        name: data.name || 'Roof Area 1',
+        system_type: data.system_type || 'TPO',
+        manufacturer: data.manufacturer || null,
+        membrane_thickness: data.membrane_thickness || null,
+        field_attachment: data.field_attachment || null,
+        wall_flashing_thickness: data.wall_flashing_thickness || null,
+        has_coverboard: data.has_coverboard || false,
+        coverboard_attachment: data.has_coverboard ? data.coverboard_attachment || null : null,
+        has_top_insulation: data.has_top_insulation || false,
+        top_insulation_attachment: data.has_top_insulation ? data.top_insulation_attachment || null : null,
+        has_bottom_insulation: data.has_bottom_insulation || false,
+        bottom_insulation_attachment: data.has_bottom_insulation ? data.bottom_insulation_attachment || null : null,
+        has_vapor_barrier: data.has_vapor_barrier || false,
+        has_vapor_barrier_board: data.has_vapor_barrier ? data.has_vapor_barrier_board || false : false,
+        vapor_barrier_board_attachment: data.has_vapor_barrier_board ? data.vapor_barrier_board_attachment || null : null,
+      }
+      if (data.id) {
+        await systemAPI.update(data.id, payload)
+      } else {
+        const res = await systemAPI.create(projectId, payload)
+        onSystemChange({ ...data, id: res.data?.id })
+      }
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (err) {
+      console.error('Failed to save system:', err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const SpecSelect = ({ label, value, options, onChange, className = '' }) => (
+    <div className={className}>
+      <label className="block text-[11px] font-medium text-gray-500 mb-1 uppercase tracking-wide">{label}</label>
+      <select
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm bg-white focus:ring-primary-500 focus:border-primary-500"
+      >
+        <option value="">Select...</option>
+        {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+      </select>
+    </div>
+  )
+
+  const SpecToggle = ({ label, value, onChange, children }) => (
+    <div className="border border-gray-100 rounded-lg px-3 py-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-gray-700">{label}</span>
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => onChange(true)}
+            className={`px-2.5 py-0.5 text-[11px] font-semibold rounded-l-md border transition-colors ${
+              value ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'
+            }`}>Yes</button>
+          <button type="button" onClick={() => onChange(false)}
+            className={`px-2.5 py-0.5 text-[11px] font-semibold rounded-r-md border transition-colors ${
+              !value ? 'bg-gray-500 text-white border-gray-500' : 'bg-white text-gray-500 border-gray-300 hover:bg-gray-50'
+            }`}>No</button>
+        </div>
+      </div>
+      {value && children && <div className="mt-2 ml-2">{children}</div>}
+    </div>
+  )
+
+  return (
+    <div className="mb-4 border border-gray-200 rounded-xl overflow-hidden bg-white">
+      {/* Header — click to expand */}
+      <div
+        className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-slate-50 to-gray-50 cursor-pointer select-none hover:bg-gray-100 transition-colors"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex-shrink-0">
+            {expanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+              Specified Roof System
+              {sys.system_type && (
+                <span className="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-800 text-[11px] font-bold rounded">
+                  {sys.system_type}
+                </span>
+              )}
+              {saving && <SpinnerIcon className="w-3 h-3 text-gray-400" />}
+              {saved && <span className="text-[11px] text-green-600 font-medium">Saved</span>}
+            </h3>
+            {!expanded && (
+              <p className="text-xs text-gray-500 mt-0.5">{summary}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Expanded content */}
+      {expanded && (
+        <div className="px-4 py-4 border-t border-gray-100 space-y-4">
+          {/* Row 1: Name + System Type + Manufacturer */}
+          <div className="flex items-end gap-3">
+            <div className="flex-shrink-0 w-40">
+              <label className="block text-[11px] font-medium text-gray-500 mb-1 uppercase tracking-wide">System Name</label>
+              <input
+                type="text"
+                value={sys.name || ''}
+                onChange={(e) => handleChange('name', e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm focus:ring-primary-500 focus:border-primary-500"
+                placeholder="Roof Area 1"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-[11px] font-medium text-gray-500 mb-1 uppercase tracking-wide">System Type</label>
+              <div className="flex gap-1">
+                {SYSTEM_TYPES.map(st => (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => handleChange('system_type', st)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                      sys.system_type === st
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {st}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="w-48">
+              <label className="block text-[11px] font-medium text-gray-500 mb-1 uppercase tracking-wide">Manufacturer</label>
+              <input
+                type="text"
+                value={sys.manufacturer || ''}
+                onChange={(e) => handleChange('manufacturer', e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm focus:ring-primary-500 focus:border-primary-500"
+                placeholder="e.g., Carlisle, GAF"
+              />
+            </div>
+          </div>
+
+          {/* Row 2: Membrane + Attachment + Wall Flashing */}
+          <div className="grid grid-cols-3 gap-3">
+            <SpecSelect label="Membrane Thickness" value={sys.membrane_thickness} options={MEMBRANE_OPTIONS} onChange={(v) => handleChange('membrane_thickness', v)} />
+            <SpecSelect label="Field Attachment" value={sys.field_attachment} options={FIELD_ATTACHMENT_OPTIONS} onChange={(v) => handleChange('field_attachment', v)} />
+            <SpecSelect label="Wall Flashing" value={sys.wall_flashing_thickness} options={WALL_FLASHING_OPTIONS} onChange={(v) => handleChange('wall_flashing_thickness', v)} />
+          </div>
+
+          {/* Row 3: Buildup Layers */}
+          <div>
+            <label className="block text-[11px] font-medium text-gray-500 mb-2 uppercase tracking-wide">Roof Buildup Layers</label>
+            <div className="grid grid-cols-2 gap-3">
+              <SpecToggle label="Coverboard" value={sys.has_coverboard} onChange={(v) => handleChange('has_coverboard', v)}>
+                <SpecSelect label="Attachment" value={sys.coverboard_attachment} options={COVERBOARD_ATTACHMENT_OPTIONS} onChange={(v) => handleChange('coverboard_attachment', v)} />
+              </SpecToggle>
+
+              <SpecToggle label="Top Insulation" value={sys.has_top_insulation} onChange={(v) => handleChange('has_top_insulation', v)}>
+                <SpecSelect label="Attachment" value={sys.top_insulation_attachment} options={INSULATION_ATTACHMENT_OPTIONS} onChange={(v) => handleChange('top_insulation_attachment', v)} />
+              </SpecToggle>
+
+              <SpecToggle label="Bottom Insulation" value={sys.has_bottom_insulation} onChange={(v) => handleChange('has_bottom_insulation', v)}>
+                <SpecSelect label="Attachment" value={sys.bottom_insulation_attachment} options={INSULATION_ATTACHMENT_OPTIONS} onChange={(v) => handleChange('bottom_insulation_attachment', v)} />
+              </SpecToggle>
+
+              <SpecToggle label="Vapor Barrier" value={sys.has_vapor_barrier} onChange={(v) => handleChange('has_vapor_barrier', v)}>
+                <SpecToggle label="Vapor Barrier Board" value={sys.has_vapor_barrier_board} onChange={(v) => handleChange('has_vapor_barrier_board', v)}>
+                  <SpecSelect label="Board Attachment" value={sys.vapor_barrier_board_attachment} options={VAPOR_BOARD_ATTACHMENT_OPTIONS} onChange={(v) => handleChange('vapor_barrier_board_attachment', v)} />
+                </SpecToggle>
+              </SpecToggle>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+// ============================================================================
+// BUILDUP STACK — Visual layer chips for field condition cards
+// ============================================================================
+function BuildupStack({ systemData }) {
+  if (!systemData) return null
+  const sys = systemData
+
+  const layers = []
+  layers.push({ label: 'Deck', color: 'bg-gray-200 text-gray-700', sub: null })
+  if (sys.has_vapor_barrier) {
+    layers.push({ label: 'VB', color: 'bg-purple-100 text-purple-800', sub: sys.has_vapor_barrier_board ? 'Board' : null })
+  }
+  if (sys.has_bottom_insulation) {
+    const att = sys.bottom_insulation_attachment ? sys.bottom_insulation_attachment.replace('Mechanically ', 'Mech. ').replace('Fastened', 'Fast.') : ''
+    layers.push({ label: 'Bottom Insul.', color: 'bg-orange-100 text-orange-800', sub: att })
+  }
+  if (sys.has_top_insulation) {
+    const att = sys.top_insulation_attachment ? sys.top_insulation_attachment.replace('Mechanically ', 'Mech. ').replace('Fastened', 'Fast.') : ''
+    layers.push({ label: 'Top Insul.', color: 'bg-orange-100 text-orange-800', sub: att })
+  }
+  if (sys.has_coverboard) {
+    const att = sys.coverboard_attachment ? sys.coverboard_attachment.replace('Mechanically ', 'Mech. ').replace('Fastened', 'Fast.') : ''
+    layers.push({ label: 'Coverboard', color: 'bg-yellow-100 text-yellow-800', sub: att })
+  }
+  layers.push({
+    label: `Membrane${sys.membrane_thickness ? ' ' + sys.membrane_thickness : ''}`,
+    color: 'bg-blue-100 text-blue-800',
+    sub: sys.field_attachment ? sys.field_attachment.replace('Mechanically ', 'Mech. ').replace('Fastened', 'Fast.') : null,
+  })
+
+  return (
+    <div className="flex items-center gap-0.5 flex-wrap mt-1">
+      {layers.map((layer, i) => (
+        <div key={i} className="flex items-center">
+          <div className={`inline-flex flex-col items-center px-1.5 py-0.5 rounded ${layer.color}`}>
+            <span className="text-[10px] font-semibold leading-tight">{layer.label}</span>
+            {layer.sub && <span className="text-[8px] opacity-70 leading-tight">{layer.sub}</span>}
+          </div>
+          {i < layers.length - 1 && <span className="text-[10px] text-gray-300 mx-0.5">→</span>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+
+// ============================================================================
 // MAIN CONDITIONS TAB
 // ============================================================================
 export default function ConditionsTab({ projectId }) {
@@ -900,16 +1195,19 @@ export default function ConditionsTab({ projectId }) {
   const [smartBuildResult, setSmartBuildResult] = useState(null)
   const [projectData, setProjectData] = useState(null)
   const [showInactive, setShowInactive] = useState(false)
+  const [systemData, setSystemData] = useState(null)
+  const [systemDirty, setSystemDirty] = useState(false)
   const [newCondition, setNewCondition] = useState({
     condition_type: '', description: '', measurement_value: '', measurement_unit: 'sqft', wind_zone: '1',
   })
 
   const fetchConditions = useCallback(async () => {
     try {
-      const [condRes, typesRes, projRes] = await Promise.all([
+      const [condRes, typesRes, projRes, sysRes] = await Promise.all([
         conditionAPI.listWithMaterials(projectId),
         referenceAPI.conditionTypes().catch(() => ({ data: [] })),
         projectAPI.get(projectId).catch(() => ({ data: null })),
+        systemAPI.list(projectId).catch(() => ({ data: [] })),
       ])
       const data = condRes.data
       if (data && data.conditions) {
@@ -921,6 +1219,11 @@ export default function ConditionsTab({ projectId }) {
       const types = typesRes.data?.condition_types || typesRes.data || []
       setConditionTypes(types)
       setProjectData(projRes.data)
+      // Load system spec data
+      const systemsList = sysRes.data || []
+      if (systemsList.length > 0) {
+        setSystemData({ ...DEFAULT_SYSTEM, ...systemsList[0] })
+      }
     } catch (err) {
       setError('Failed to load conditions')
     } finally {
@@ -1000,8 +1303,48 @@ export default function ConditionsTab({ projectId }) {
 
   const currentSystem = systems.length > 0 ? systems[0] : null
 
+  const handleRefreshMaterials = async () => {
+    try {
+      await conditionAPI.populateMaterials(projectId)
+      setSystemDirty(false)
+      fetchConditions()
+    } catch {
+      setError('Failed to refresh materials')
+    }
+  }
+
   return (
     <div>
+      {/* Specified Roof System Panel */}
+      <SystemSpecPanel
+        projectId={projectId}
+        systemData={systemData}
+        onSystemChange={(data) => {
+          setSystemData(data)
+          setSystemDirty(true)
+        }}
+        onSystemTypeChange={handleSystemTypeChange}
+      />
+
+      {/* Refresh Materials Banner — shows when system spec changed */}
+      {systemDirty && conditions.length > 0 && (
+        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            <span className="text-sm text-amber-800">System spec changed. Refresh materials to update conditions with new settings.</span>
+          </div>
+          <button
+            onClick={handleRefreshMaterials}
+            className="inline-flex items-center px-3 py-1.5 text-xs font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg transition-colors"
+          >
+            <BoltIcon className="w-3 h-3 mr-1" />
+            Refresh Materials
+          </button>
+        </div>
+      )}
+
       {/* Plan Analysis */}
       <PlanAnalysisSection projectId={projectId} onConditionsChanged={fetchConditions} />
 
@@ -1016,29 +1359,6 @@ export default function ConditionsTab({ projectId }) {
             <p className="text-sm text-blue-700 mt-1">
               Reads spec analysis + plan extractions to build conditions with materials for each roof area.
             </p>
-
-            {/* System Type Selector */}
-            <div className="mt-3 flex items-center gap-3 flex-wrap">
-              <label className="text-xs font-medium text-blue-800">System:</label>
-              <div className="flex gap-1">
-                {['TPO', 'EPDM', 'PVC', 'ModBit', 'BUR', 'StandingSeam'].map(sys => (
-                  <button
-                    key={sys}
-                    onClick={() => handleSystemTypeChange(sys)}
-                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                      (projectData?.system_type || '').toUpperCase() === sys.toUpperCase()
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'bg-white text-blue-700 border border-blue-300 hover:bg-blue-100'
-                    }`}
-                  >
-                    {sys}
-                  </button>
-                ))}
-              </div>
-              {!projectData?.system_type && (
-                <span className="text-xs text-amber-600 italic">Auto-detect from spec</span>
-              )}
-            </div>
           </div>
           <div className="flex flex-col gap-2 ml-4">
             <button
@@ -1184,6 +1504,7 @@ export default function ConditionsTab({ projectId }) {
                 onRefresh={fetchConditions}
                 onToggleActive={() => handleToggleConditionActive(c.id, true)}
                 isSystemCondition={!!c.roof_system_id}
+                systemData={systemData}
               />
             ))}
           </div>
