@@ -3,6 +3,7 @@ import { costDatabaseAPI } from '../../api'
 
 const CATEGORIES = ['All', 'membrane', 'insulation', 'coverboard', 'fastener', 'flashing', 'adhesive', 'accessory', 'sealant', 'coatings', 'asphalt', 'plates']
 const UNITS = ['sqft', 'lnft', 'each', 'gallon', 'roll']
+const MFR_QUICK_PICKS = ['Generic', 'Carlisle', 'Firestone', 'GAF', 'Johns Manville', 'Versico']
 
 const fmtMoney = (v) => v != null ? `$${Number(v).toFixed(2)}` : '—'
 
@@ -105,7 +106,7 @@ function ItemModal({ item, onSave, onClose }) {
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
             <div className="flex flex-wrap gap-1 mt-1">
-              {['Generic', 'Carlisle', 'Firestone', 'GAF', 'Johns Manville', 'Versico'].map(mfr => (
+              {MFR_QUICK_PICKS.map(mfr => (
                 <button key={mfr} type="button"
                   onClick={() => setForm({ ...form, manufacturer: mfr })}
                   className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
@@ -180,6 +181,7 @@ function InlineEditRow({ item, onSave, onCancel }) {
   const [pu, setPu] = useState(item.purchase_unit || '')
   const [upp, setUpp] = useState(item.units_per_purchase ?? '')
   const [category, setCategory] = useState(item.material_category || '')
+  const [manufacturer, setManufacturer] = useState(item.manufacturer || '')
   const [saving, setSaving] = useState(false)
 
   const cats = category.split(',').map(c => c.trim()).filter(Boolean)
@@ -203,6 +205,7 @@ function InlineEditRow({ item, onSave, onCancel }) {
         purchase_unit: pu || null,
         units_per_purchase: upp ? parseFloat(upp) : null,
         material_category: category,
+        manufacturer: manufacturer || null,
       })
       onSave()
     } catch (err) {
@@ -218,7 +221,23 @@ function InlineEditRow({ item, onSave, onCancel }) {
       <td className="px-3 py-2 text-sm text-gray-900">
         <div className="min-w-[200px]">{item.material_name}</div>
       </td>
-      <td className="px-3 py-2 text-sm text-gray-600">{item.manufacturer || '—'}</td>
+      <td className="px-3 py-2">
+        <input
+          type="text"
+          value={manufacturer}
+          onChange={e => setManufacturer(e.target.value)}
+          placeholder="Manufacturer"
+          className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary-500 mb-1"
+        />
+        <div className="flex flex-wrap gap-0.5">
+          {MFR_QUICK_PICKS.map(mfr => (
+            <button key={mfr} type="button" onClick={() => setManufacturer(mfr)}
+              className={`px-1 py-0.5 text-[9px] font-medium rounded transition-colors ${
+                manufacturer === mfr ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+              }`}>{mfr}</button>
+          ))}
+        </div>
+      </td>
       <td className="px-3 py-2">
         <div className="flex flex-wrap gap-0.5 min-w-[120px]">
           {CATEGORIES.filter(c => c !== 'All').map(cat => (
@@ -495,22 +514,28 @@ export default function CostDatabaseTab() {
           </button>
           {/* Zero Labor Button */}
           <button
-            onClick={async () => {
+            onClick={async (e) => {
               if (!window.confirm('Zero out labor costs on ALL materials? This cannot be undone.')) return
+              const btn = e.currentTarget
+              btn.disabled = true
+              btn.textContent = 'Zeroing...'
               try {
                 const res = await costDatabaseAPI.zeroLabor()
-                alert(res.data?.message || 'Done')
+                const msg = res.data?.message || `Zeroed ${res.data?.count || 0} items`
+                showMsg(msg, 'success')
                 loadItems()
               } catch (err) {
                 console.error('Zero labor error:', err)
-                alert('Failed to zero labor costs: ' + (err.response?.data?.detail || err.response?.status || err.message))
+                const detail = err.response?.data?.detail || err.response?.statusText || err.message
+                showMsg(`Failed: ${detail}`, 'error')
+                alert('Zero labor failed: ' + detail + '\n\nStatus: ' + (err.response?.status || 'unknown'))
+              } finally {
+                btn.disabled = false
+                btn.textContent = 'Zero Labor'
               }
             }}
             className="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-300 rounded-md hover:bg-red-100 flex items-center gap-2"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-            </svg>
             Zero Labor
           </button>
           {/* Add Button */}
