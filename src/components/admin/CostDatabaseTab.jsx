@@ -474,7 +474,10 @@ export default function CostDatabaseTab() {
                 const res = await costDatabaseAPI.zeroLabor()
                 alert(res.data?.message || 'Done')
                 loadItems()
-              } catch { alert('Failed to zero labor costs') }
+              } catch (err) {
+                console.error('Zero labor error:', err)
+                alert('Failed to zero labor costs: ' + (err.response?.data?.detail || err.response?.status || err.message))
+              }
             }}
             className="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-300 rounded-md hover:bg-red-100 flex items-center gap-2"
           >
