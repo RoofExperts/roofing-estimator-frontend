@@ -91,7 +91,39 @@ function ItemModal({ item, onSave, onClose }) {
         <div className="px-6 py-4 grid grid-cols-2 gap-4">
           <Field label="Material Name" field="material_name" placeholder="e.g. TPO 60mil Membrane" />
           <Field label="Manufacturer" field="manufacturer" half placeholder="e.g. Carlisle" />
-          <Field label="Category" field="material_category" half options={CATEGORIES.filter(c => c !== 'All')} />
+          {/* Multi-category selector */}
+          <div className="col-span-1">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
+            <div className="flex flex-wrap gap-1 p-1.5 border border-gray-300 rounded-md bg-white min-h-[38px]">
+              {CATEGORIES.filter(c => c !== 'All').map(cat => {
+                const cats = (form.material_category || '').split(',').map(c => c.trim()).filter(Boolean)
+                const isSelected = cats.includes(cat)
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => {
+                      let newCats
+                      if (isSelected) {
+                        newCats = cats.filter(c => c !== cat)
+                        if (newCats.length === 0) newCats = [cat]
+                      } else {
+                        newCats = [...cats, cat]
+                      }
+                      setForm({ ...form, material_category: newCats.join(',') })
+                    }}
+                    className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
+                      isSelected
+                        ? 'bg-primary-600 text-white'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
           <Field label="Unit" field="unit" half options={UNITS} />
           <Field label="Unit Cost ($)" field="unit_cost" type="number" half />
           <Field label="Labor Cost ($)" field="labor_cost_per_unit" type="number" half />
@@ -235,7 +267,7 @@ export default function CostDatabaseTab() {
   const filtered = useMemo(() => {
     let result = items
     if (categoryFilter !== 'All') {
-      result = result.filter(i => i.material_category === categoryFilter)
+      result = result.filter(i => (i.material_category || '').split(',').map(c => c.trim()).includes(categoryFilter))
     }
     if (manufacturerFilter !== 'All') {
       result = result.filter(i => i.manufacturer === manufacturerFilter)
@@ -538,9 +570,13 @@ export default function CostDatabaseTab() {
                     </td>
                     <td className="px-3 py-2 text-sm text-gray-600">{item.manufacturer || '—'}</td>
                     <td className="px-3 py-2">
-                      <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${catColor[item.material_category] || 'bg-gray-100 text-gray-800'}`}>
-                        {item.material_category}
-                      </span>
+                      <div className="flex flex-wrap gap-0.5">
+                        {(item.material_category || '').split(',').map(c => c.trim()).filter(Boolean).map((cat, ci) => (
+                          <span key={ci} className={`inline-block px-2 py-0.5 text-[10px] font-medium rounded-full ${catColor[cat] || 'bg-gray-100 text-gray-800'}`}>
+                            {cat}
+                          </span>
+                        ))}
+                      </div>
                     </td>
                     <td className="px-3 py-2 text-sm text-gray-600">{item.unit}</td>
                     <td className={`px-3 py-2 text-sm text-right ${item.unit_cost ? 'text-gray-900' : 'text-red-500 font-medium'}`}>

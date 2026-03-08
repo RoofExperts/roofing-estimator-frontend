@@ -280,16 +280,22 @@ function MaterialItem({ material, index, totalCount, conditionMeasurement, onUpd
         {/* Material Name + Product Details */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-sm text-gray-900 truncate">{material.material_name}</span>
+            <span className="font-medium text-sm text-gray-900">{material.material_name}</span>
           </div>
-          {/* Product line: manufacturer + product name from cost DB */}
-          {(material.manufacturer || material.product_name) && (
-            <div className="text-xs text-gray-500 mt-0.5 truncate">
-              {material.manufacturer && <span>{material.manufacturer}</span>}
-              {material.manufacturer && material.product_name && <span> — </span>}
-              {material.product_name && <span>{material.product_name}</span>}
-            </div>
-          )}
+          {/* Subtitle: manufacturer + product name (only if different from material_name) */}
+          {(() => {
+            const mName = (material.material_name || '').toLowerCase()
+            const pName = (material.product_name || '').toLowerCase()
+            const showProduct = material.product_name && !pName.includes(mName) && !mName.includes(pName)
+            if (!material.manufacturer && !showProduct) return null
+            return (
+              <div className="text-xs text-gray-500 mt-0.5">
+                {material.manufacturer && <span>{material.manufacturer}</span>}
+                {material.manufacturer && showProduct && <span> — </span>}
+                {showProduct && <span>{material.product_name}</span>}
+              </div>
+            )
+          })()}
         </div>
 
         {/* Product link status + change button */}

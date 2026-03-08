@@ -144,6 +144,8 @@ function AddMaterialModal({ isOpen, onClose, onSave, conditionType, systemType, 
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [nameQuery, setNameQuery] = useState('')
+  const [nameDropdownOpen, setNameDropdownOpen] = useState(false)
 
   // Reset form when modal opens
   useEffect(() => {
@@ -157,25 +159,38 @@ function AddMaterialModal({ isOpen, onClose, onSave, conditionType, systemType, 
         calc_type: '',
         is_optional: false,
       })
+      setNameQuery('')
       setError(null)
     }
   }, [isOpen])
 
-  // When user picks a cost item from datalist, auto-fill category and unit
-  const handleNameChange = (e) => {
-    const name = e.target.value
-    setForm(prev => ({ ...prev, material_name: name }))
+  // Filtered cost items for dropdown
+  const filteredCostItems = costItems.filter(ci => {
+    if (!nameQuery.trim()) return true
+    const q = nameQuery.toLowerCase()
+    return (
+      (ci.material_name || '').toLowerCase().includes(q) ||
+      (ci.manufacturer || '').toLowerCase().includes(q) ||
+      (ci.product_name || '').toLowerCase().includes(q)
+    )
+  }).slice(0, 30)
 
-    // Try to match a cost database item and auto-fill fields
-    const match = costItems.find(ci => ci.material_name === name)
-    if (match) {
-      setForm(prev => ({
-        ...prev,
-        material_name: name,
-        material_category: match.material_category || prev.material_category,
-        unit: match.unit || prev.unit,
-      }))
-    }
+  const handleSelectCostItem = (item) => {
+    setNameQuery(item.material_name)
+    setForm(prev => ({
+      ...prev,
+      material_name: item.material_name,
+      material_category: item.material_category || prev.material_category,
+      unit: item.unit || prev.unit,
+    }))
+    setNameDropdownOpen(false)
+  }
+
+  const handleNameInput = (e) => {
+    const val = e.target.value
+    setNameQuery(val)
+    setForm(prev => ({ ...prev, material_name: val }))
+    setNameDropdownOpen(true)
   }
 
   const handleSubmit = async () => {
@@ -222,38 +237,80 @@ function AddMaterialModal({ isOpen, onClose, onSave, conditionType, systemType, 
           <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>
         )}
 
-        {/* Material Name with autocomplete from cost database */}
-        <div>
+        {/* Material Name — searchable dropdown from cost database */}
+        <div className="relative">
           <label className="block text-sm font-medium text-gray-700 mb-1">Material Name</label>
           <input
             type="text"
-            list="cost-item-suggestions"
-            value={form.material_name}
-            onChange={handleNameChange}
-            placeholder="Type or select from cost database..."
+            value={nameQuery}
+            onChange={handleNameInput}
+            onFocus={() => setNameDropdownOpen(true)}
+            onBlur={() => setTimeout(() => setNameDropdownOpen(false), 200)}
+            placeholder="Search cost database by name, manufacturer..."
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
             autoFocus
           />
-          <datalist id="cost-item-suggestions">
-            {costItems.map((ci, i) => (
-              <option key={i} value={ci.material_name} />
-            ))}
-          </datalist>
+          {nameDropdownOpen && filteredCostItems.length > 0 && (
+            <div className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-xl">
+              {filteredCostItems.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleSelectCostItem(item)}
+                  className="w-full text-left px-3 py-2.5 hover:bg-primary-50 border-b border-gray-50 last:border-0 transition-colors"
+                >
+                  <div className="text-sm font-medium text-gray-900">{item.material_name}</div>
+                  <div className="text-xs text-gray-500 flex flex-wrap gap-2 mt-0.5">
+                    {item.manufacturer && <span className="font-medium">{item.manufacturer}</span>}
+                    <span className="px-1.5 py-0.5 bg-gray-100 rounded text-[10px]">{item.material_category}</span>
+                    <span>{item.unit}</span>
+                    {item.unit_cost > 0 && <span>${Number(item.unit_cost).toFixed(2)}/{item.unit}</span>}
+                    {item.product_name && <span className="text-gray-400">{item.product_name}</span>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+          {form.material_name && form.material_name !== nameQuery && (
+            <p className="mt-1 text-xs text-green-600">Selected: {form.material_name}</p>
+          )}
         </div>
 
         {/* Category + Unit row */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-            <select
-              value={form.material_category}
-              onChange={(e) => setForm({ ...form, material_category: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-            >
-              {CATEGORY_OPTIONS.map(cat => (
-                <option key={cat} value={cat}>{cat.replace('_', ' ')}</option>
-              ))}
-            </select>
+            <div className="flex flex-wrap gap-1.5 p-2 border border-gray-300 rounded-lg bg-white min-h-[38px]">
+              {CATEGORY_OPTIONS.map(cat => {
+                const cats = (form.material_category || '').split(',').map(c => c.trim()).filter(Boolean)
+                const isSelected = cats.includes(cat)
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => {
+                      let newCats
+                      if (isSelected) {
+                        newCats = cats.filter(c => c !== cat)
+                        if (newCats.length === 0) newCats = [cat] // must have at least one
+                      } else {
+                        newCats = [...cats, cat]
+                      }
+                      setForm({ ...form, material_category: newCats.join(',') })
+                    }}
+                    className={`px-2 py-0.5 text-[11px] font-medium rounded transition-colors ${
+                      isSelected
+                        ? 'bg-primary-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {cat.replace('_', ' ')}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="mt-1 text-[10px] text-gray-400">Click multiple to assign to several categories</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
