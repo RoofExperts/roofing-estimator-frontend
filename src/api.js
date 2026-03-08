@@ -230,6 +230,7 @@ export const costDatabaseAPI = {
   },
   resync: (updatePricing = false) => api.post(`/api/v1/cost-database/resync?update_pricing=${updatePricing}`),
   dedup: (dryRun = true) => api.post(`/api/v1/cost-database/dedup?dry_run=${dryRun}`),
+  zeroLabor: () => api.post(`/api/v1/cost-database/zero-labor`),
 }
 
 export default api
