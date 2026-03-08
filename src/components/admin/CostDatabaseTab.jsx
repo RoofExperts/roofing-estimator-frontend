@@ -297,6 +297,7 @@ export default function CostDatabaseTab() {
   const [sortDir, setSortDir] = useState('asc')
   const [dedupResult, setDedupResult] = useState(null)
   const [dedupRunning, setDedupRunning] = useState(false)
+  const [zeroingLabor, setZeroingLabor] = useState(false)
 
   const loadItems = async () => {
     setLoading(true)
@@ -514,29 +515,30 @@ export default function CostDatabaseTab() {
           </button>
           {/* Zero Labor Button */}
           <button
-            onClick={async (e) => {
+            disabled={zeroingLabor}
+            onClick={async () => {
               if (!window.confirm('Zero out labor costs on ALL materials? This cannot be undone.')) return
-              const btn = e.currentTarget
-              btn.disabled = true
-              btn.textContent = 'Zeroing...'
+              setZeroingLabor(true)
               try {
+                console.log('Zero labor: sending request...')
                 const res = await costDatabaseAPI.zeroLabor()
+                console.log('Zero labor response:', res.data)
                 const msg = res.data?.message || `Zeroed ${res.data?.count || 0} items`
                 showMsg(msg, 'success')
-                loadItems()
+                await loadItems()
               } catch (err) {
                 console.error('Zero labor error:', err)
+                console.error('Zero labor response:', err.response)
                 const detail = err.response?.data?.detail || err.response?.statusText || err.message
                 showMsg(`Failed: ${detail}`, 'error')
                 alert('Zero labor failed: ' + detail + '\n\nStatus: ' + (err.response?.status || 'unknown'))
               } finally {
-                btn.disabled = false
-                btn.textContent = 'Zero Labor'
+                setZeroingLabor(false)
               }
             }}
-            className="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-300 rounded-md hover:bg-red-100 flex items-center gap-2"
+            className="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-300 rounded-md hover:bg-red-100 flex items-center gap-2 disabled:opacity-50"
           >
-            Zero Labor
+            {zeroingLabor ? 'Zeroing...' : 'Zero Labor'}
           </button>
           {/* Add Button */}
           <button
