@@ -153,8 +153,20 @@ function InlineEditRow({ item, onSave, onCancel }) {
   const [labor, setLabor] = useState(item.labor_cost_per_unit ?? 0)
   const [pu, setPu] = useState(item.purchase_unit || '')
   const [upp, setUpp] = useState(item.units_per_purchase ?? '')
-  const [pn, setPn] = useState(item.product_name || '')
+  const [category, setCategory] = useState(item.material_category || '')
   const [saving, setSaving] = useState(false)
+
+  const cats = category.split(',').map(c => c.trim()).filter(Boolean)
+  const toggleCat = (cat) => {
+    let newCats
+    if (cats.includes(cat)) {
+      newCats = cats.filter(c => c !== cat)
+      if (newCats.length === 0) newCats = [cat]
+    } else {
+      newCats = [...cats, cat]
+    }
+    setCategory(newCats.join(','))
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -164,7 +176,7 @@ function InlineEditRow({ item, onSave, onCancel }) {
         labor_cost_per_unit: parseFloat(labor) || 0,
         purchase_unit: pu || null,
         units_per_purchase: upp ? parseFloat(upp) : null,
-        product_name: pn || null,
+        material_category: category,
       })
       onSave()
     } catch (err) {
@@ -177,12 +189,19 @@ function InlineEditRow({ item, onSave, onCancel }) {
 
   return (
     <tr className="bg-blue-50 border-b border-blue-200">
-      <td className="px-3 py-2 text-sm text-gray-900">{item.material_name}</td>
+      <td className="px-3 py-2 text-sm text-gray-900">
+        <div className="min-w-[200px]">{item.material_name}</div>
+      </td>
       <td className="px-3 py-2 text-sm text-gray-600">{item.manufacturer || '—'}</td>
       <td className="px-3 py-2">
-        <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded-full ${catColor[item.material_category] || 'bg-gray-100 text-gray-800'}`}>
-          {item.material_category}
-        </span>
+        <div className="flex flex-wrap gap-0.5 min-w-[120px]">
+          {CATEGORIES.filter(c => c !== 'All').map(cat => (
+            <button key={cat} type="button" onClick={() => toggleCat(cat)}
+              className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
+                cats.includes(cat) ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+              }`}>{cat}</button>
+          ))}
+        </div>
       </td>
       <td className="px-3 py-2 text-sm text-gray-600">{item.unit}</td>
       <td className="px-3 py-2">
@@ -200,10 +219,6 @@ function InlineEditRow({ item, onSave, onCancel }) {
       <td className="px-3 py-2">
         <input type="number" value={upp} onChange={e => setUpp(e.target.value)}
           className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-right focus:ring-2 focus:ring-primary-500" placeholder="500" />
-      </td>
-      <td className="px-3 py-2">
-        <input type="text" value={pn} onChange={e => setPn(e.target.value)}
-          className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary-500" />
       </td>
       <td className="px-3 py-2">
         <div className="flex gap-1">
