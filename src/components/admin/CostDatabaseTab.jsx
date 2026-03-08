@@ -3,7 +3,19 @@ import { costDatabaseAPI } from '../../api'
 
 const CATEGORIES = ['All', 'membrane', 'insulation', 'coverboard', 'fastener', 'flashing', 'adhesive', 'accessory', 'sealant', 'coatings', 'asphalt', 'plates']
 const UNITS = ['sqft', 'lnft', 'each', 'gallon', 'roll']
-const MFR_QUICK_PICKS = ['Generic', 'Carlisle', 'Firestone', 'GAF', 'Johns Manville', 'Versico']
+const MFR_QUICK_PICKS = [
+  'Generic',
+  'Carlisle/Versico',
+  'Elevate (Firestone/GenFlex)',
+  'GAF',
+  'Johns Manville',
+  'IB Systems',
+  'Fibertite',
+  'Sarnafil',
+  'USG',
+  'GP',
+  'DEXcell',
+]
 
 const fmtMoney = (v) => v != null ? `$${Number(v).toFixed(2)}` : '—'
 
