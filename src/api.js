@@ -236,6 +236,7 @@ export const costDatabaseAPI = {
     manufacturer: data.manufacturer || null,
     material_category: data.material_category || null,
   }),
+  cleanNames: (dryRun = true) => api.post(`/api/v1/cost-database/clean-names?dry_run=${dryRun}`),
 }
 
 export default api
