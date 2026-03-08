@@ -93,7 +93,7 @@ const SYSTEM_TYPES = [
 
 const CATEGORY_OPTIONS = [
   'membrane', 'insulation', 'coverboard', 'fastener', 'adhesive',
-  'sealant', 'accessory', 'base_sheet', 'flashing',
+  'sealant', 'accessory', 'base_sheet', 'flashing', 'coatings', 'asphalt', 'plates',
 ]
 
 const UNIT_OPTIONS = [

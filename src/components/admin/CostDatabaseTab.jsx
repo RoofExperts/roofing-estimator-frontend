@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { costDatabaseAPI } from '../../api'
 
-const CATEGORIES = ['All', 'membrane', 'insulation', 'fastener', 'flashing', 'adhesive', 'accessory', 'sealant']
+const CATEGORIES = ['All', 'membrane', 'insulation', 'coverboard', 'fastener', 'flashing', 'adhesive', 'accessory', 'sealant', 'coatings', 'asphalt', 'plates']
 const UNITS = ['sqft', 'lnft', 'each', 'gallon', 'roll']
 
 const fmtMoney = (v) => v != null ? `$${Number(v).toFixed(2)}` : '—'
@@ -10,11 +10,15 @@ const fmtMoney = (v) => v != null ? `$${Number(v).toFixed(2)}` : '—'
 const catColor = {
   membrane: 'bg-blue-100 text-blue-800',
   insulation: 'bg-yellow-100 text-yellow-800',
+  coverboard: 'bg-amber-100 text-amber-800',
   fastener: 'bg-gray-100 text-gray-800',
   flashing: 'bg-orange-100 text-orange-800',
   adhesive: 'bg-green-100 text-green-800',
   accessory: 'bg-purple-100 text-purple-800',
   sealant: 'bg-pink-100 text-pink-800',
+  coatings: 'bg-sky-100 text-sky-800',
+  asphalt: 'bg-stone-200 text-stone-800',
+  plates: 'bg-zinc-100 text-zinc-800',
 }
 
 // ── Add/Edit Modal ──

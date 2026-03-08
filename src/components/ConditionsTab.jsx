@@ -183,9 +183,13 @@ const COVERAGE_LABELS = {
   sealant:   'Tubes / 100 LF',
   membrane:  'Coverage Rate',
   insulation:'Coverage Rate',
+  coverboard:'Coverage Rate',
   flashing:  'Coverage Rate',
   metal:     'Coverage Rate',
   accessory: 'Coverage Rate',
+  coatings:  'Gal / SQ',
+  asphalt:   'Coverage Rate',
+  plates:    'Per Board',
   misc:      'Coverage Rate',
 }
 
@@ -245,13 +249,16 @@ function MaterialItem({ material, index, totalCount, conditionMeasurement, onUpd
   const catColors = {
     membrane: 'bg-blue-100 text-blue-800',
     insulation: 'bg-purple-100 text-purple-800',
+    coverboard: 'bg-amber-100 text-amber-800',
     fastener: 'bg-orange-100 text-orange-800',
     adhesive: 'bg-teal-100 text-teal-800',
     flashing: 'bg-amber-100 text-amber-800',
     metal: 'bg-gray-200 text-gray-800',
     sealant: 'bg-cyan-100 text-cyan-800',
     accessory: 'bg-pink-100 text-pink-800',
-    coverboard: 'bg-yellow-100 text-yellow-800',
+    coatings: 'bg-sky-100 text-sky-800',
+    asphalt: 'bg-stone-200 text-stone-800',
+    plates: 'bg-zinc-100 text-zinc-800',
     base_sheet: 'bg-lime-100 text-lime-800',
     misc: 'bg-slate-100 text-slate-700',
   }
