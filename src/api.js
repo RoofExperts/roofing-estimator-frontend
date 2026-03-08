@@ -231,6 +231,11 @@ export const costDatabaseAPI = {
   resync: (updatePricing = false) => api.post(`/api/v1/cost-database/resync?update_pricing=${updatePricing}`),
   dedup: (dryRun = true) => api.post(`/api/v1/cost-database/dedup?dry_run=${dryRun}`),
   zeroLabor: () => api.post(`/api/v1/cost-database/zero-labor`),
+  bulkUpdate: (itemIds, data) => api.post('/api/v1/cost-database/bulk-update', {
+    item_ids: itemIds,
+    manufacturer: data.manufacturer || null,
+    material_category: data.material_category || null,
+  }),
 }
 
 export default api

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { costDatabaseAPI } from '../../api'
 
 const CATEGORIES = ['All', 'membrane', 'insulation', 'coverboard', 'fastener', 'flashing', 'adhesive', 'accessory', 'sealant', 'coatings', 'asphalt', 'plates']
@@ -218,6 +218,7 @@ function InlineEditRow({ item, onSave, onCancel }) {
 
   return (
     <tr className="bg-blue-50 border-b border-blue-200">
+      <td className="px-3 py-2 text-center w-10"></td>
       <td className="px-3 py-2 text-sm text-gray-900">
         <div className="min-w-[200px]">{item.material_name}</div>
       </td>
@@ -297,7 +298,9 @@ export default function CostDatabaseTab() {
   const [sortDir, setSortDir] = useState('asc')
   const [dedupResult, setDedupResult] = useState(null)
   const [dedupRunning, setDedupRunning] = useState(false)
-  const [zeroingLabor, setZeroingLabor] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [bulkForm, setBulkForm] = useState({ manufacturer: '', material_category: '' })
+  const [bulkUpdating, setBulkUpdating] = useState(false)
 
   const loadItems = async () => {
     setLoading(true)
@@ -429,6 +432,58 @@ export default function CostDatabaseTab() {
     </th>
   )
 
+  // ── Selection handlers ──
+  const handleSelectItem = (itemId) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(itemId)) next.delete(itemId)
+      else next.add(itemId)
+      return next
+    })
+  }
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === filtered.length && filtered.length > 0) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filtered.map(item => item.id)))
+    }
+  }
+
+  const handleBulkUpdate = async () => {
+    if (selectedIds.size === 0) return
+    if (!bulkForm.manufacturer && !bulkForm.material_category) {
+      showMsg('Select a manufacturer or category to apply', 'error')
+      return
+    }
+    if (!window.confirm(`Update ${selectedIds.size} item(s)? This cannot be undone.`)) return
+    setBulkUpdating(true)
+    try {
+      const res = await costDatabaseAPI.bulkUpdate(Array.from(selectedIds), bulkForm)
+      showMsg(res.data?.message || `Updated ${selectedIds.size} items`, 'success')
+      setSelectedIds(new Set())
+      setBulkForm({ manufacturer: '', material_category: '' })
+      await loadItems()
+    } catch (err) {
+      console.error('Bulk update failed:', err)
+      showMsg('Bulk update failed: ' + (err.response?.data?.detail || err.message), 'error')
+    } finally {
+      setBulkUpdating(false)
+    }
+  }
+
+  const clearSelection = () => {
+    setSelectedIds(new Set())
+    setBulkForm({ manufacturer: '', material_category: '' })
+  }
+
+  // Checkbox ref for indeterminate state
+  const selectAllRef = useCallback(node => {
+    if (node) {
+      node.indeterminate = selectedIds.size > 0 && selectedIds.size < filtered.length
+    }
+  }, [selectedIds.size, filtered.length])
+
   return (
     <div>
       {/* Toast */}
@@ -513,33 +568,6 @@ export default function CostDatabaseTab() {
             )}
             Clean Duplicates
           </button>
-          {/* Zero Labor Button */}
-          <button
-            disabled={zeroingLabor}
-            onClick={async () => {
-              if (!window.confirm('Zero out labor costs on ALL materials? This cannot be undone.')) return
-              setZeroingLabor(true)
-              try {
-                console.log('Zero labor: sending request...')
-                const res = await costDatabaseAPI.zeroLabor()
-                console.log('Zero labor response:', res.data)
-                const msg = res.data?.message || `Zeroed ${res.data?.count || 0} items`
-                showMsg(msg, 'success')
-                await loadItems()
-              } catch (err) {
-                console.error('Zero labor error:', err)
-                console.error('Zero labor response:', err.response)
-                const detail = err.response?.data?.detail || err.response?.statusText || err.message
-                showMsg(`Failed: ${detail}`, 'error')
-                alert('Zero labor failed: ' + detail + '\n\nStatus: ' + (err.response?.status || 'unknown'))
-              } finally {
-                setZeroingLabor(false)
-              }
-            }}
-            className="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-300 rounded-md hover:bg-red-100 flex items-center gap-2 disabled:opacity-50"
-          >
-            {zeroingLabor ? 'Zeroing...' : 'Zero Labor'}
-          </button>
           {/* Add Button */}
           <button
             onClick={() => { setModalItem(null); setShowModal(true) }}
@@ -618,6 +646,16 @@ export default function CostDatabaseTab() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-3 py-3 text-center w-10">
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                    onChange={handleSelectAll}
+                    className="w-4 h-4 rounded border-gray-300 cursor-pointer"
+                    title="Select all"
+                  />
+                </th>
                 <SortHeader field="material_name">Name</SortHeader>
                 <SortHeader field="manufacturer">Manufacturer</SortHeader>
                 <SortHeader field="material_category">Category</SortHeader>
@@ -632,14 +670,14 @@ export default function CostDatabaseTab() {
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-12 text-center">
+                  <td colSpan={10} className="px-6 py-12 text-center">
                     <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600 mr-2"></div>
                     Loading cost database...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={10} className="px-6 py-12 text-center text-gray-500">
                     No items found matching your filters.
                   </td>
                 </tr>
@@ -652,7 +690,15 @@ export default function CostDatabaseTab() {
                     onCancel={() => setEditingId(null)}
                   />
                 ) : (
-                  <tr key={item.id} className={`hover:bg-gray-50 ${(!item.unit_cost || item.unit_cost === 0) ? 'bg-yellow-50' : ''}`}>
+                  <tr key={item.id} className={`hover:bg-gray-50 ${selectedIds.has(item.id) ? 'bg-blue-50' : ''} ${(!item.unit_cost || item.unit_cost === 0) ? 'bg-yellow-50' : ''}`}>
+                    <td className="px-3 py-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(item.id)}
+                        onChange={() => handleSelectItem(item.id)}
+                        className="w-4 h-4 rounded border-gray-300 cursor-pointer"
+                      />
+                    </td>
                     <td className="px-3 py-2 text-sm font-medium text-gray-900">
                       <div className="min-w-[200px]">
                         {item.material_name}
@@ -716,6 +762,73 @@ export default function CostDatabaseTab() {
           </table>
         </div>
       </div>
+
+      {/* Floating Bulk Action Bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-4xl bg-white rounded-lg shadow-2xl border border-gray-200 p-4 z-40">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-semibold text-gray-900">
+              {selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''} selected
+            </span>
+            <button onClick={clearSelection} className="text-xs text-gray-500 hover:text-gray-700">
+              Clear selection
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+            {/* Manufacturer */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Set Manufacturer</label>
+              <input
+                type="text"
+                value={bulkForm.manufacturer}
+                onChange={e => setBulkForm(f => ({ ...f, manufacturer: e.target.value }))}
+                placeholder="Type or pick below..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary-500 mb-1"
+              />
+              <div className="flex flex-wrap gap-1">
+                {MFR_QUICK_PICKS.map(mfr => (
+                  <button key={mfr} type="button"
+                    onClick={() => setBulkForm(f => ({ ...f, manufacturer: mfr }))}
+                    className={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
+                      bulkForm.manufacturer === mfr ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}>{mfr}</button>
+                ))}
+              </div>
+            </div>
+            {/* Category */}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Set Category</label>
+              <div className="flex flex-wrap gap-1 p-2 border border-gray-300 rounded-md bg-white min-h-[40px]">
+                {CATEGORIES.filter(c => c !== 'All').map(cat => {
+                  const cats = (bulkForm.material_category || '').split(',').map(c => c.trim()).filter(Boolean)
+                  const isOn = cats.includes(cat)
+                  return (
+                    <button key={cat} type="button"
+                      onClick={() => {
+                        const next = isOn ? cats.filter(c => c !== cat) : [...cats, cat]
+                        setBulkForm(f => ({ ...f, material_category: next.join(',') }))
+                      }}
+                      className={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
+                        isOn ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}>{cat}</button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button onClick={clearSelection}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200">
+              Cancel
+            </button>
+            <button onClick={handleBulkUpdate}
+              disabled={bulkUpdating || (!bulkForm.manufacturer && !bulkForm.material_category)}
+              className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
+              {bulkUpdating ? 'Updating...' : `Apply to ${selectedIds.size} Items`}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation */}
       {deleteConfirm && (
