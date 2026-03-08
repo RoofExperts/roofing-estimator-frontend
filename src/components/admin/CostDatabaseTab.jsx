@@ -94,7 +94,29 @@ function ItemModal({ item, onSave, onClose }) {
         </div>
         <div className="px-6 py-4 grid grid-cols-2 gap-4">
           <Field label="Material Name" field="material_name" placeholder="e.g. TPO 60mil Membrane" />
-          <Field label="Manufacturer" field="manufacturer" half placeholder="e.g. Carlisle" />
+          {/* Manufacturer with quick-pick tags */}
+          <div className="col-span-1">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Manufacturer</label>
+            <input
+              type="text"
+              value={form.manufacturer}
+              onChange={e => setForm({ ...form, manufacturer: e.target.value })}
+              placeholder="e.g. Carlisle"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+            <div className="flex flex-wrap gap-1 mt-1">
+              {['Generic', 'Carlisle', 'Firestone', 'GAF', 'Johns Manville', 'Versico'].map(mfr => (
+                <button key={mfr} type="button"
+                  onClick={() => setForm({ ...form, manufacturer: mfr })}
+                  className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
+                    form.manufacturer === mfr
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >{mfr}</button>
+              ))}
+            </div>
+          </div>
           {/* Multi-category selector */}
           <div className="col-span-1">
             <label className="block text-xs font-medium text-gray-600 mb-1">Category</label>
@@ -280,6 +302,7 @@ export default function CostDatabaseTab() {
   // Derived data
   const manufacturers = useMemo(() => {
     const set = new Set(items.map(i => i.manufacturer).filter(Boolean))
+    set.add('Generic')
     return ['All', ...Array.from(set).sort()]
   }, [items])
 
