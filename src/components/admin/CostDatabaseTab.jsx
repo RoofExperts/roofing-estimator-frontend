@@ -19,6 +19,17 @@ const MFR_QUICK_PICKS = [
 
 const fmtMoney = (v) => v != null ? `$${Number(v).toFixed(2)}` : '—'
 
+// ── Reusable multi-tag toggle helper ──
+const parseTags = (val) => (val || '').split(',').map(s => s.trim()).filter(Boolean)
+const toggleTag = (current, tag) => {
+  const tags = parseTags(current)
+  if (tags.includes(tag)) {
+    const next = tags.filter(t => t !== tag)
+    return next.length > 0 ? next.join(',') : ''
+  }
+  return [...tags, tag].join(',')
+}
+
 // ── Category badge colors ──
 const catColor = {
   membrane: 'bg-blue-100 text-blue-800',
@@ -107,27 +118,21 @@ function ItemModal({ item, onSave, onClose }) {
         </div>
         <div className="px-6 py-4 grid grid-cols-2 gap-4">
           <Field label="Material Name" field="material_name" placeholder="e.g. TPO 60mil Membrane" />
-          {/* Manufacturer with quick-pick tags */}
+          {/* Manufacturer multi-select tags */}
           <div className="col-span-1">
             <label className="block text-xs font-medium text-gray-600 mb-1">Manufacturer</label>
-            <input
-              type="text"
-              value={form.manufacturer}
-              onChange={e => setForm({ ...form, manufacturer: e.target.value })}
-              placeholder="e.g. Carlisle"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-            <div className="flex flex-wrap gap-1 mt-1">
-              {MFR_QUICK_PICKS.map(mfr => (
-                <button key={mfr} type="button"
-                  onClick={() => setForm({ ...form, manufacturer: mfr })}
-                  className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
-                    form.manufacturer === mfr
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                  }`}
-                >{mfr}</button>
-              ))}
+            <div className="flex flex-wrap gap-1 p-1.5 border border-gray-300 rounded-md bg-white min-h-[38px]">
+              {MFR_QUICK_PICKS.map(mfr => {
+                const isSelected = parseTags(form.manufacturer).includes(mfr)
+                return (
+                  <button key={mfr} type="button"
+                    onClick={() => setForm({ ...form, manufacturer: toggleTag(form.manufacturer, mfr) })}
+                    className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
+                      isSelected ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >{mfr}</button>
+                )
+              })}
             </div>
           </div>
           {/* Multi-category selector */}
@@ -235,18 +240,12 @@ function InlineEditRow({ item, onSave, onCancel }) {
         <div className="min-w-[200px]">{item.material_name}</div>
       </td>
       <td className="px-3 py-2">
-        <input
-          type="text"
-          value={manufacturer}
-          onChange={e => setManufacturer(e.target.value)}
-          placeholder="Manufacturer"
-          className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary-500 mb-1"
-        />
-        <div className="flex flex-wrap gap-0.5">
+        <div className="flex flex-wrap gap-0.5 min-w-[120px]">
           {MFR_QUICK_PICKS.map(mfr => (
-            <button key={mfr} type="button" onClick={() => setManufacturer(mfr)}
+            <button key={mfr} type="button"
+              onClick={() => setManufacturer(toggleTag(manufacturer, mfr))}
               className={`px-1 py-0.5 text-[9px] font-medium rounded transition-colors ${
-                manufacturer === mfr ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                parseTags(manufacturer).includes(mfr) ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
               }`}>{mfr}</button>
           ))}
         </div>
@@ -336,8 +335,11 @@ export default function CostDatabaseTab() {
 
   // Derived data
   const manufacturers = useMemo(() => {
-    const set = new Set(items.map(i => i.manufacturer).filter(Boolean))
-    set.add('Generic')
+    const set = new Set()
+    items.forEach(i => {
+      parseTags(i.manufacturer).forEach(m => set.add(m))
+    })
+    MFR_QUICK_PICKS.forEach(m => set.add(m))
     return ['All', ...Array.from(set).sort()]
   }, [items])
 
@@ -347,7 +349,7 @@ export default function CostDatabaseTab() {
       result = result.filter(i => (i.material_category || '').split(',').map(c => c.trim()).includes(categoryFilter))
     }
     if (manufacturerFilter !== 'All') {
-      result = result.filter(i => i.manufacturer === manufacturerFilter)
+      result = result.filter(i => parseTags(i.manufacturer).includes(manufacturerFilter))
     }
     if (search.trim()) {
       const q = search.toLowerCase()
@@ -719,7 +721,18 @@ export default function CostDatabaseTab() {
                         )}
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-sm text-gray-600">{item.manufacturer || '—'}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap gap-0.5">
+                        {parseTags(item.manufacturer).length > 0
+                          ? parseTags(item.manufacturer).map((mfr, mi) => (
+                              <span key={mi} className="inline-block px-2 py-0.5 text-[10px] font-medium rounded-full bg-indigo-100 text-indigo-800">
+                                {mfr}
+                              </span>
+                            ))
+                          : <span className="text-sm text-gray-400">—</span>
+                        }
+                      </div>
+                    </td>
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap gap-0.5">
                         {(item.material_category || '').split(',').map(c => c.trim()).filter(Boolean).map((cat, ci) => (
@@ -790,21 +803,17 @@ export default function CostDatabaseTab() {
             {/* Manufacturer */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Set Manufacturer</label>
-              <input
-                type="text"
-                value={bulkForm.manufacturer}
-                onChange={e => setBulkForm(f => ({ ...f, manufacturer: e.target.value }))}
-                placeholder="Type or pick below..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-primary-500 mb-1"
-              />
-              <div className="flex flex-wrap gap-1">
-                {MFR_QUICK_PICKS.map(mfr => (
-                  <button key={mfr} type="button"
-                    onClick={() => setBulkForm(f => ({ ...f, manufacturer: mfr }))}
-                    className={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
-                      bulkForm.manufacturer === mfr ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}>{mfr}</button>
-                ))}
+              <div className="flex flex-wrap gap-1 p-2 border border-gray-300 rounded-md bg-white min-h-[40px]">
+                {MFR_QUICK_PICKS.map(mfr => {
+                  const isOn = parseTags(bulkForm.manufacturer).includes(mfr)
+                  return (
+                    <button key={mfr} type="button"
+                      onClick={() => setBulkForm(f => ({ ...f, manufacturer: toggleTag(f.manufacturer, mfr) }))}
+                      className={`px-2 py-0.5 text-xs font-medium rounded transition-colors ${
+                        isOn ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}>{mfr}</button>
+                  )
+                })}
               </div>
             </div>
             {/* Category */}
