@@ -554,21 +554,20 @@ export default function CostDatabaseTab() {
                 <SortHeader field="labor_cost_per_unit" className="text-right">Labor $</SortHeader>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Purch Unit</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qty/Purch</th>
-                <SortHeader field="product_name">Product Name</SortHeader>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={10} className="px-6 py-12 text-center">
+                  <td colSpan={9} className="px-6 py-12 text-center">
                     <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600 mr-2"></div>
                     Loading cost database...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
                     No items found matching your filters.
                   </td>
                 </tr>
@@ -582,8 +581,13 @@ export default function CostDatabaseTab() {
                   />
                 ) : (
                   <tr key={item.id} className={`hover:bg-gray-50 ${(!item.unit_cost || item.unit_cost === 0) ? 'bg-yellow-50' : ''}`}>
-                    <td className="px-3 py-2 text-sm font-medium text-gray-900 max-w-[250px] truncate" title={item.material_name}>
-                      {item.material_name}
+                    <td className="px-3 py-2 text-sm font-medium text-gray-900">
+                      <div className="min-w-[200px]">
+                        {item.material_name}
+                        {item.product_name && item.product_name.toLowerCase() !== item.material_name.toLowerCase() && (
+                          <div className="text-xs text-gray-400 font-normal mt-0.5">{item.product_name}</div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-2 text-sm text-gray-600">{item.manufacturer || '—'}</td>
                     <td className="px-3 py-2">
@@ -602,9 +606,6 @@ export default function CostDatabaseTab() {
                     <td className="px-3 py-2 text-sm text-right text-gray-600">{fmtMoney(item.labor_cost_per_unit)}</td>
                     <td className="px-3 py-2 text-sm text-gray-600">{item.purchase_unit || '—'}</td>
                     <td className="px-3 py-2 text-sm text-gray-600 text-right">{item.units_per_purchase || '—'}</td>
-                    <td className="px-3 py-2 text-sm text-gray-500 max-w-[200px] truncate" title={item.product_name || ''}>
-                      {item.product_name || '—'}
-                    </td>
                     <td className="px-3 py-2">
                       <div className="flex gap-1">
                         <button
