@@ -1,19 +1,65 @@
-import { useState, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { projectAPI } from '../api'
 import PdfViewer from './PdfViewer'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://roof-estimator-backend.onrender.com'
+
+const SPEC_FIELDS = [
+  { key: 'roof_system_type', label: 'Roof System Type' },
+  { key: 'membrane_type', label: 'Membrane Type' },
+  { key: 'membrane_thickness', label: 'Membrane Thickness' },
+  { key: 'attachment_method', label: 'Attachment Method' },
+  { key: 'insulation_type', label: 'Insulation Type' },
+  { key: 'cover_board', label: 'Cover Board' },
+  { key: 'warranty_years', label: 'Warranty Years' },
+  { key: 'manufacturer', label: 'Manufacturer' },
+  { key: 'special_requirements', label: 'Special Requirements' },
+]
 
 export default function SpecificationsTab({ project, onProjectUpdate }) {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [showViewer, setShowViewer] = useState(false)
+  const [analyzeError, setAnalyzeError] = useState('')
   const fileInputRef = useRef(null)
 
   const hasSpec = project?.spec_file_url
   const specUrl = hasSpec ? project.spec_file_url : null
   const proxyUrl = project?.id ? `${API_BASE_URL}/projects/${project.id}/spec-file` : null
+  const isProcessing = project?.analysis_status === 'processing'
+  const analysisResult = project?.spec_analysis || null
+
+  // Poll every 3 seconds while the backend is processing
+  useEffect(() => {
+    if (!isProcessing) return
+    const interval = setInterval(async () => {
+      try {
+        const res = await projectAPI.get(project.id)
+        if (res.data.analysis_status !== 'processing') {
+          clearInterval(interval)
+          if (res.data.analysis_status === 'failed') {
+            setAnalyzeError('Analysis failed. Please try again.')
+          }
+          if (onProjectUpdate) onProjectUpdate()
+        }
+      } catch (err) {
+        clearInterval(interval)
+        setAnalyzeError('Failed to check analysis status.')
+      }
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [isProcessing, project?.id])
+
+  const handleAnalyzeSpec = async () => {
+    setAnalyzeError('')
+    try {
+      await projectAPI.analyzeSpec(project.id)
+      if (onProjectUpdate) onProjectUpdate()
+    } catch (err) {
+      setAnalyzeError(err.response?.data?.detail || 'Failed to start analysis.')
+    }
+  }
 
   const handleUpload = async (file) => {
     if (!file || !file.name.toLowerCase().endsWith('.pdf')) {
@@ -39,25 +85,55 @@ export default function SpecificationsTab({ project, onProjectUpdate }) {
     if (file) handleUpload(file)
   }
 
+  const renderValue = (val) => {
+    if (val === null || val === undefined) return <span className="text-gray-400 italic">—</span>
+    if (Array.isArray(val)) return val.join(', ')
+    return String(val)
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-900">Specifications</h2>
         {hasSpec && (
-          <button
-            onClick={() => setShowViewer(!showViewer)}
-            className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              showViewer
-                ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                : 'bg-primary-600 text-white hover:bg-primary-700'
-            }`}
-          >
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
-            {showViewer ? 'Hide Viewer' : 'View Specification'}
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setShowViewer(!showViewer)}
+              className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                showViewer
+                  ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  : 'bg-primary-600 text-white hover:bg-primary-700'
+              }`}
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              {showViewer ? 'Hide Viewer' : 'View Specification'}
+            </button>
+            <button
+              onClick={handleAnalyzeSpec}
+              disabled={isProcessing}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isProcessing ? (
+                <>
+                  <svg className="animate-spin w-4 h-4 mr-2" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                  Analyze Spec
+                </>
+              )}
+            </button>
+          </div>
         )}
       </div>
 
@@ -65,6 +141,13 @@ export default function SpecificationsTab({ project, onProjectUpdate }) {
         <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
           {error}
           <button onClick={() => setError('')} className="float-right text-red-500 hover:text-red-700">x</button>
+        </div>
+      )}
+
+      {analyzeError && (
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+          {analyzeError}
+          <button onClick={() => setAnalyzeError('')} className="float-right text-red-500 hover:text-red-700">x</button>
         </div>
       )}
 
@@ -158,6 +241,37 @@ export default function SpecificationsTab({ project, onProjectUpdate }) {
         </div>
       )}
 
+      {/* Processing spinner shown below the upload card */}
+      {isProcessing && (
+        <div className="mt-6 bg-indigo-50 border border-indigo-200 rounded-lg p-6 text-center">
+          <svg className="animate-spin mx-auto w-8 h-8 text-indigo-500 mb-3" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <p className="text-sm font-medium text-indigo-700">Analyzing specification...</p>
+          <p className="text-xs text-indigo-500 mt-1">This may take 15–30 seconds</p>
+        </div>
+      )}
+
+      {/* Analysis results */}
+      {analysisResult && !isProcessing && (
+        <div className="mt-6 bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900">Spec Analysis Results</h3>
+          </div>
+          <dl className="divide-y divide-gray-100">
+            {SPEC_FIELDS.map(({ key, label }) =>
+              analysisResult[key] !== undefined && analysisResult[key] !== null ? (
+                <div key={key} className="px-4 py-3 grid grid-cols-2 gap-4">
+                  <dt className="text-sm font-medium text-gray-500">{label}</dt>
+                  <dd className="text-sm text-gray-900">{renderValue(analysisResult[key])}</dd>
+                </div>
+              ) : null
+            )}
+          </dl>
+        </div>
+      )}
+
       {!hasSpec && (
         <p className="mt-4 text-center text-sm text-gray-500">
           No specification uploaded yet. Upload a PDF to get started.
@@ -165,4 +279,4 @@ export default function SpecificationsTab({ project, onProjectUpdate }) {
       )}
     </div>
   )
-    }
+}
