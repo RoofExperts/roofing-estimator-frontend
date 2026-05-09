@@ -28,7 +28,15 @@ export default function SpecificationsTab({ project, onProjectUpdate }) {
   const specUrl = hasSpec ? project.spec_file_url : null
   const proxyUrl = project?.id ? `${API_BASE_URL}/projects/${project.id}/spec-file` : null
   const isProcessing = project?.analysis_status === 'processing'
-  const analysisResult = project?.spec_analysis || null
+  const analysisResult = (() => {
+    const raw = project?.analysis_result
+    if (!raw) return null
+    try {
+      return typeof raw === 'string' ? JSON.parse(raw) : raw
+    } catch {
+      return null
+    }
+  })()
 
   // Poll every 3 seconds while the backend is processing
   useEffect(() => {
@@ -253,8 +261,23 @@ export default function SpecificationsTab({ project, onProjectUpdate }) {
         </div>
       )}
 
+      {/* Backend returned an error payload */}
+      {analysisResult && analysisResult.error && !isProcessing && (
+        <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-start space-x-3">
+            <svg className="w-5 h-5 text-red-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-red-800">Analysis Error</p>
+              <p className="text-sm text-red-700 mt-1">{analysisResult.error}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Analysis results */}
-      {analysisResult && !isProcessing && (
+      {analysisResult && !analysisResult.error && !isProcessing && (
         <div className="mt-6 bg-white border border-gray-200 rounded-lg overflow-hidden">
           <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
             <h3 className="text-sm font-semibold text-gray-900">Spec Analysis Results</h3>
